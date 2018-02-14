@@ -7,6 +7,7 @@
 from __future__ import print_function, division, absolute_import
 
 import numpy as np
+from tqdm import tqdm
 
 import torch
 from torch import nn
@@ -18,26 +19,35 @@ from .lr import LRSchedule
 
 class BaseNet(nn.Module):
     
-    def __init__(self, loss_fn=F.cross_entropy):
-        super(BaseWrapper, self).__init__()
+    def __init__(self, loss_fn=F.cross_entropy, verbose=False):
+        super(BaseNet, self).__init__()
         self.loss_fn = loss_fn
         self.opt = None
         self.progress = 0
         self.epoch = 0
         self.lr = -1
+        self.verbose = verbose
     
     # --
     # Optimization
     
-    def init_optimizer(self, opt, params, lr_scheduler, **kwargs):
+    def init_optimizer(self, opt, params, lr_scheduler=None, **kwargs):
         assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR from outside"
         if lr_scheduler is not None:
             self.lr_scheduler = lr_scheduler
             self.opt = opt(params, lr=self.lr_scheduler(0), **kwargs)
+        else:
+            self.lr_scheduler = None
+            self.opt = opt(params, **kwargs)
     
     def set_progress(self, progress):
-        self.progress, self.lr = progress, self.lr_scheduler(progress)
-        LRSchedule.set_lr(self.opt, self.lr)
+        if self.lr_scheduler is not None:
+            self.progress, self.lr = progress, self.lr_scheduler(progress)
+            LRSchedule.set_lr(self.opt, self.lr)
+    
+    def zero_progress(self):
+        self.epoch = 0
+        self.set_progress(0.0)
     
     # --
     # Batch steps
@@ -63,8 +73,12 @@ class BaseNet(nn.Module):
         assert self.opt is not None, "BaseWrapper: self.opt is None"
         
         loader = dataloaders['train']
+        gen = enumerate(loader)
+        if self.verbose:
+            gen = tqdm(gen, total=len(loader))
+        
         correct, total = 0, 0
-        for batch_idx, (data, target) in enumerate(loader):
+        for batch_idx, (data, target) in gen:
             data, target = Variable(data.cuda()), Variable(target.cuda())
             
             self.set_progress(self.epoch + batch_idx / len(loader))
@@ -76,6 +90,9 @@ class BaseNet(nn.Module):
             
             if batch_idx > num_batches:
                 break
+            
+            if self.verbose:
+                gen.set_postfix(acc=correct / total)
         
         self.epoch += 1
         return correct / total
@@ -89,7 +106,12 @@ class BaseNet(nn.Module):
         else:
             _ = self.eval()
             correct, total = 0, 0 
-            for batch_idx, (data, target) in enumerate(loader):
+            
+            gen = enumerate(loader)
+            if self.verbose:
+                gen = tqdm(gen, total=len(loader))
+            
+            for batch_idx, (data, target) in gen:
                 data = Variable(data.cuda(), volatile=True)
                 
                 output = self(data)
@@ -99,6 +121,9 @@ class BaseNet(nn.Module):
                 
                 if batch_idx > num_batches:
                     break
+                
+                if self.verbose:
+                    gen.set_postfix(acc=correct / total)
             
             return correct / total
 
