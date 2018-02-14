@@ -1,0 +1,3 @@
+basenet.egg-info/*
+build/*
+dist/*
