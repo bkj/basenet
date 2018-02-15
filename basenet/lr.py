@@ -88,10 +88,10 @@ class LRSchedule(object):
         return f
     
     @staticmethod
-    def exponential_increase(lr_init=0.1, lr_max=10, num_steps=100):
+    def exponential_increase(lr_init=0.1, lr_max=10, num_steps=100, **kwargs):
         mult = (lr_max / lr_init) ** (1 / num_steps)
         def f(progress):
-            return lr_init * mult ** (progress * num_steps)
+            return lr_init * mult ** progress
             
         return f
 
@@ -99,40 +99,38 @@ if __name__ == "__main__":
     from rsub import *
     from matplotlib import pyplot as plt
     
-    # Step
-    lr = LRSchedule.step(lr_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    _ = plt.plot(lrs[:,0])
-    _ = plt.plot(lrs[:,1])
-    show_plot()
+    # # Step
+    # lr = LRSchedule.step(lr_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
+    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(lrs[:,0])
+    # _ = plt.plot(lrs[:,1])
+    # show_plot()
     
-    # Linear
-    lr = LRSchedule.linear(epochs=30, lr_init=np.array([1, 2]))
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    _ = plt.plot(lrs[:,0])
-    _ = plt.plot(lrs[:,1])
-    show_plot()
+    # # Linear
+    # lr = LRSchedule.linear(epochs=30, lr_init=np.array([1, 2]))
+    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(lrs[:,0])
+    # _ = plt.plot(lrs[:,1])
+    # show_plot()
     
-    # Cyclical
-    lr = LRSchedule.cyclical(epochs=30, lr_init=np.array([1, 2]))
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    _ = plt.plot(lrs[:,0])
-    _ = plt.plot(lrs[:,1])
-    show_plot()
+    # # Cyclical
+    # lr = LRSchedule.cyclical(epochs=30, lr_init=np.array([1, 2]))
+    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(lrs[:,0])
+    # _ = plt.plot(lrs[:,1])
+    # show_plot()
     
-    # SGDR
-    lr = LRSchedule.sgdr(period_length=10, t_mult=2, lr_init=np.array([1, 2]))
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    _ = plt.plot(lrs[:,0])
-    _ = plt.plot(lrs[:,1])
-    show_plot()
+    # # SGDR
+    # lr = LRSchedule.sgdr(period_length=10, t_mult=2, lr_init=np.array([1, 2]))
+    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(lrs[:,0])
+    # _ = plt.plot(lrs[:,1])
+    # show_plot()
     
     # exponential increase (for setting learning rates)
-    lr = LRSchedule.exponential_increase(lr_init=np.array([1e-5, 1e-4]), lr_max=10, num_steps=400)
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 1, 1000)])
+    lr = LRSchedule.exponential_increase(lr_init=np.array([1e-5, 1e-4]), lr_max=10, num_steps=100)
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 100, 1000)])
     _ = plt.plot(lrs[:,0])
     _ = plt.plot(lrs[:,1])
+    _ = plt.yscale('log')
     show_plot()
-
-
-print('done')
