@@ -71,7 +71,7 @@ class LRSchedule(object):
         return f
     
     @staticmethod
-    def sgdr(lr_init=0.05, period_length=50, lr_min=0, t_mult=1, **kwargs):
+    def sgdr(lr_init=0.1, period_length=50, lr_min=0, t_mult=1, **kwargs):
         print('sgdr: period_length=%d | lr_init=%s' % (period_length, str(lr_init)), file=sys.stderr)
         def f(progress):
             """ SGDR learning rate annealing """
@@ -86,7 +86,14 @@ class LRSchedule(object):
             return lr_min + 0.5 * (lr_init - lr_min) * (1 + np.cos(period_progress * np.pi))
         
         return f
-
+    
+    @staticmethod
+    def exponential_increase(lr_init=0.1, lr_max=10, num_steps=100):
+        mult = (lr_max / lr_init) ** (1 / num_steps)
+        def f(progress):
+            return lr_init * mult ** (progress * num_steps)
+            
+        return f
 
 if __name__ == "__main__":
     from rsub import *
@@ -119,4 +126,13 @@ if __name__ == "__main__":
     _ = plt.plot(lrs[:,0])
     _ = plt.plot(lrs[:,1])
     show_plot()
+    
+    # exponential increase (for setting learning rates)
+    lr = LRSchedule.exponential_increase(lr_init=np.array([1e-5, 1e-4]), lr_max=10, num_steps=400)
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 1, 1000)])
+    _ = plt.plot(lrs[:,0])
+    _ = plt.plot(lrs[:,1])
+    show_plot()
 
+
+print('done')
