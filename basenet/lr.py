@@ -27,31 +27,37 @@ class LRSchedule(object):
     
     @staticmethod
     def set_lr(optimizer, lr):
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = lr
+        num_param_groups = len(list(optimizer.param_groups))
+        
+        if isinstance(lr, float):
+            lr = [lr] * num_param_groups
+        else:
+            assert len(lr) == num_param_groups, "len(lr) != num_param_groups"
+        
+        for i, param_group in enumerate(optimizer.param_groups):
+            param_group['lr'] = lr[i]
     
     @staticmethod
-    def constant(lr_init=0.1, epochs=10):
+    def constant(lr_init=0.1, **kwargs):
         def f(progress):
             return lr_init
         
         return f
     
     @staticmethod
-    def step(breaks=(150, 250), lrs=[10 ** -1, 10 ** -2, 10 ** -3], **kwargs):
+    def step(lr_init=0.1, breaks=(150, 250), factors=(0.1, 0.1), **kwargs):
+        """ Step function learning rate annealing """
+        assert len(breaks) == len(factors)
+        breaks = np.array(breaks)
         def f(progress):
-            if progress < breaks[0]:
-                return lrs[0]
-            elif progress < breaks[1]:
-                return lrs[1]
-            else:
-                return lrs[2]
+            return lr_init * np.prod(factors[:((progress >= breaks).sum())])
         
         return f
     
     @staticmethod
     def linear(lr_init=0.1, epochs=10, **kwargs):
         def f(progress):
+            """ Linear learning rate annealing """
             return lr_init * float(epochs - progress) / epochs
         
         return f
@@ -60,19 +66,15 @@ class LRSchedule(object):
     def cyclical(lr_init=0.1, lr_burn_in=0.05, epochs=10, **kwargs):
         def f(progress):
             """ Cyclical learning rate w/ annealing """
-            if progress < 1:
-                # Start w/ small learning rate
-                return lr_burn_in
-            else:
-                return lr_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
+            return lr_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
         
         return f
     
     @staticmethod
     def sgdr(lr_init=0.05, period_length=50, lr_min=0, t_mult=1, **kwargs):
-        print('sgdr: period_length=%d | lr_init=%f' % (period_length, lr_init), file=sys.stderr)
+        print('sgdr: period_length=%d | lr_init=%s' % (period_length, str(lr_init)), file=sys.stderr)
         def f(progress):
-            """ Cosine learning rate annealing """
+            """ SGDR learning rate annealing """
             if t_mult > 1:
                 period_id = np.floor(inv_power_sum(progress / period_length, t_mult)) + 1
                 offsets = power_sum(t_mult, period_id - 1) * period_length
@@ -90,7 +92,31 @@ if __name__ == "__main__":
     from rsub import *
     from matplotlib import pyplot as plt
     
-    lr = LRSchedule.sgdr(period_length=30, t_mult=2)
-    
-    _ = plt.plot(lr(np.arange(450)))
+    # Step
+    lr = LRSchedule.step(lr_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    _ = plt.plot(lrs[:,0])
+    _ = plt.plot(lrs[:,1])
     show_plot()
+    
+    # Linear
+    lr = LRSchedule.linear(epochs=30, lr_init=np.array([1, 2]))
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    _ = plt.plot(lrs[:,0])
+    _ = plt.plot(lrs[:,1])
+    show_plot()
+    
+    # Cyclical
+    lr = LRSchedule.cyclical(epochs=30, lr_init=np.array([1, 2]))
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    _ = plt.plot(lrs[:,0])
+    _ = plt.plot(lrs[:,1])
+    show_plot()
+    
+    # SGDR
+    lr = LRSchedule.sgdr(period_length=10, t_mult=2, lr_init=np.array([1, 2]))
+    lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
+    _ = plt.plot(lrs[:,0])
+    _ = plt.plot(lrs[:,1])
+    show_plot()
+

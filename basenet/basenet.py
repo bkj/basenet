@@ -32,8 +32,8 @@ class BaseNet(nn.Module):
     # Optimization
     
     def init_optimizer(self, opt, params, lr_scheduler=None, **kwargs):
-        assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR from outside"
         if lr_scheduler is not None:
+            assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR and lr_scheduler"
             self.lr_scheduler = lr_scheduler
             self.opt = opt(params, lr=self.lr_scheduler(0), **kwargs)
         else:
