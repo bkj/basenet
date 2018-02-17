@@ -17,6 +17,19 @@ from torch.autograd import Variable
 from .helpers import to_numpy
 from .lr import LRSchedule
 
+# --
+# Helpers
+
+def _set_train(x, mode):
+    x.training = False if getattr(x, 'frozen', False) else mode
+    for module in x.children():
+        _set_train(module, mode)
+    
+    return x
+
+# --
+# Model
+
 class BaseNet(nn.Module):
     
     def __init__(self, loss_fn=F.cross_entropy, verbose=False):
@@ -36,85 +49,76 @@ class BaseNet(nn.Module):
             assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR and lr_scheduler"
             self.lr_scheduler = lr_scheduler
             self.opt = opt(params, lr=self.lr_scheduler(0), **kwargs)
+            self.set_progress(0)
         else:
             self.lr_scheduler = None
             self.opt = opt(params, **kwargs)
     
     def set_progress(self, progress):
+        self.progress = progress
+        self.epoch = np.floor(progress)
         if self.lr_scheduler is not None:
-            self.progress, self.lr = progress, self.lr_scheduler(progress)
+            self.lr = self.lr_scheduler(progress)
             LRSchedule.set_lr(self.opt, self.lr)
     
-    def zero_progress(self):
-        self.epoch = 0
-        self.set_progress(0.0)
+    # --
+    # Training states
+    
+    def train(self, mode=True):
+        """ have to override this function to allow more finegrained control """
+        return _set_train(self, mode=mode)
     
     # --
     # Batch steps
     
     def train_batch(self, data, target):
+        data, target = Variable(data.cuda()), Variable(target.cuda())
+        
         _ = self.train()
+        
         self.opt.zero_grad()
         output = self(data)
         loss = self.loss_fn(output, target)
         loss.backward()
         self.opt.step()
-        return output
+        
+        return output, float(loss)
     
     def eval_batch(self, data, target):
+        data, target = Variable(data.cuda(), volatile=True), Variable(target.cuda())
+        
         _ = self.eval()
+        
         output = self(data)
-        return (to_numpy(output).argmax(axis=1) == to_numpy(target)).mean()
+        loss = self.loss_fn(output, target)
+        
+        return output, float(loss)
     
     # --
     # Epoch steps
     
-    def train_epoch(self, dataloaders, num_batches=np.inf):
-        assert self.opt is not None, "BaseWrapper: self.opt is None"
-        
-        loader = dataloaders['train']
-        gen = enumerate(loader)
-        if self.verbose:
-            gen = tqdm(gen, total=len(loader))
-        
-        correct, total = 0, 0
-        for batch_idx, (data, target) in gen:
-            data, target = Variable(data.cuda()), Variable(target.cuda())
-            
-            self.set_progress(self.epoch + batch_idx / len(loader))
-            
-            output = self.train_batch(data, target)
-            
-            correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-            total += data.shape[0]
-            
-            if batch_idx > num_batches:
-                break
-            
-            if self.verbose:
-                gen.set_postfix(acc=correct / total)
-        
-        self.epoch += 1
-        return correct / total
-    
-    def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
+    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
         assert self.opt is not None, "BaseWrapper: self.opt is None"
         
         loader = dataloaders[mode]
         if loader is None:
             return None
         else:
-            _ = self.eval()
-            correct, total = 0, 0 
-            
             gen = enumerate(loader)
             if self.verbose:
                 gen = tqdm(gen, total=len(loader))
             
+            avg_mom  = 0.98
+            avg_loss = 0.0
+            correct, total, loss_hist = 0, 0, []
             for batch_idx, (data, target) in gen:
-                data = Variable(data.cuda(), volatile=True)
+                self.set_progress(self.epoch + batch_idx / len(loader))
                 
-                output = self(data)
+                output, loss = self.train_batch(data, target)
+                loss_hist.append(loss)
+                
+                avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
+                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
                 
                 correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
                 total += data.shape[0]
@@ -125,7 +129,42 @@ class BaseNet(nn.Module):
                 if self.verbose:
                     gen.set_postfix(acc=correct / total)
             
-            return correct / total
+            self.epoch += 1
+            return {
+                "acc"  : correct / total,
+                "loss" : np.hstack(loss_hist),
+                "debias_loss" : debias_loss,
+            }
+        
+    def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
+        
+        loader = dataloaders[mode]
+        if loader is None:
+            return None
+        else:
+            gen = enumerate(loader)
+            if self.verbose:
+                gen = tqdm(gen, total=len(loader))
+            
+            correct, total, loss_hist = 0, 0, []
+            for batch_idx, (data, target) in gen:
+                
+                output, loss = self.eval_batch(data, target)
+                loss_hist.append(loss)
+                
+                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
+                total += data.shape[0]
+                
+                if batch_idx > num_batches:
+                    break
+                
+                if self.verbose:
+                    gen.set_postfix(acc=correct / total)
+            
+            return {
+                "acc"  : correct / total,
+                "loss" : np.hstack(loss_hist),
+            }
 
 
 class BaseWrapper(BaseNet):

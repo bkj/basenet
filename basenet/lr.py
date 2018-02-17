@@ -72,7 +72,6 @@ class LRSchedule(object):
     
     @staticmethod
     def sgdr(lr_init=0.1, period_length=50, lr_min=0, t_mult=1, **kwargs):
-        print('sgdr: period_length=%d | lr_init=%s' % (period_length, str(lr_init)), file=sys.stderr)
         def f(progress):
             """ SGDR learning rate annealing """
             if t_mult > 1:
