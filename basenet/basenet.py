@@ -41,6 +41,16 @@ class BaseNet(nn.Module):
         self.lr = -1
         self.verbose = verbose
     
+    def cuda(self, device=None):
+        self._cuda = True
+        super().cuda(device=device)
+        return self
+    
+    def cpu(self):
+        self._cuda = False
+        super().cpu()
+        return self
+    
     # --
     # Optimization
     
@@ -72,7 +82,9 @@ class BaseNet(nn.Module):
     # Batch steps
     
     def train_batch(self, data, target):
-        data, target = Variable(data.cuda()), Variable(target.cuda())
+        data, target = Variable(data), Variable(target)
+        if self._cuda:
+            data, target = data.cuda(), target.cuda()
         
         _ = self.train()
         
@@ -85,7 +97,9 @@ class BaseNet(nn.Module):
         return output, float(loss)
     
     def eval_batch(self, data, target):
-        data, target = Variable(data.cuda(), volatile=True), Variable(target.cuda())
+        data, target = Variable(data, volatile=True), Variable(target)
+        if self._cuda:
+            data, target = data.cuda(), target.cuda()
         
         _ = self.eval()
         
@@ -165,6 +179,12 @@ class BaseNet(nn.Module):
                 "acc"  : correct / total,
                 "loss" : np.hstack(loss_hist),
             }
+    
+    def save(self, outpath):
+        torch.save(self.state_dict(), outpath)
+    
+    def load(self, inpath):
+        self.load_state_dict(torch.load(inpath))
 
 
 class BaseWrapper(BaseNet):
