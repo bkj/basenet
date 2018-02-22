@@ -9,7 +9,13 @@
 from __future__ import print_function, division
 
 import sys
+import copy
 import numpy as np
+
+import torch
+from torch import nn
+from torch.nn import functional as F
+from torch.autograd import Variable
 
 # --
 # Helpers
@@ -87,12 +93,98 @@ class LRSchedule(object):
         return f
     
     @staticmethod
+    def burnin_sgdr(lr_init=0.1, burnin_progress=0.15, burnin_factor=100, **kwargs):
+        sgdr = LRSchedule.sgdr(lr_init=lr_init, **kwargs)
+        
+        def f(progress):
+            """ SGDR learning rate annealing, w/ constant burnin period """
+            if progress < burnin_progress:
+                return lr_init / burnin_factor
+            else:
+                return sgdr(progress)
+        
+        return f
+    
+    @staticmethod
     def exponential_increase(lr_init=0.1, lr_max=10, num_steps=100, **kwargs):
         mult = (lr_max / lr_init) ** (1 / num_steps)
         def f(progress):
             return lr_init * mult ** progress
             
         return f
+
+# --
+# LR Finder
+
+class LRFind(object):
+    
+    @staticmethod
+    def find(model, dataloaders, lr_init=1e-5, lr_max=10, lr_mults=None, params=None, mode='train', smooth_loss=False):
+        assert mode in dataloaders, '%s not in loader' % mode
+        
+        # --
+        # Setup LR schedule
+        
+        model = copy.deepcopy(model)
+        
+        if lr_mults is not None:
+            lr_init *= lr_mults
+        
+        lr_scheduler = LRSchedule.exponential_increase(lr_init=lr_init, lr_max=lr_max, num_steps=len(dataloaders[mode]))
+        
+        if params is None:
+            params = model.parameters()
+        
+        model.init_optimizer(
+            opt=torch.optim.SGD,
+            params=params,
+            lr_scheduler=lr_scheduler,
+            momentum=0.9
+        )
+        
+        # --
+        # Run epoch of training w/ increasing learning rate
+        
+        avg_mom  = 0.98 # For smooth_loss
+        avg_loss = 0.   # For smooth_loss
+        
+        lr_hist, loss_hist = [], []
+        for batch_idx, (data, target) in enumerate(dataloaders[mode]):
+            
+            model.set_progress(batch_idx)
+            
+            _, loss = model.train_batch(data, target)
+            if smooth_loss:
+                avg_loss    = avg_loss * avg_mom + loss * (1 - avg_mom)
+                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
+                loss_hist.append(debias_loss)
+            else:
+                loss_hist.append(loss)
+            
+            lr_hist.append(model.lr)
+            
+            if loss > np.min(loss_hist) * 4:
+                break
+        
+        return np.vstack(lr_hist), loss_hist
+    
+    @staticmethod
+    def get_optimal_lr(lr_hist, loss_hist, c=10, burnin=5):
+        """
+            For now, gets smallest loss and goes back an order of magnitude
+            Maybe it'd be better to use the point w/ max slope?  Or not use smoothed estimate? 
+        """
+        lr_hist, loss_hist = lr_hist[burnin:], loss_hist[burnin:]
+        
+        min_loss_idx = np.array(loss_hist).argmin()
+        min_loss_lr = lr_hist[min_loss_idx]
+        opt_lr = min_loss_lr / c
+        
+        if len(opt_lr) == 1:
+            opt_lr = opt_lr[0]
+        
+        return opt_lr
+
 
 if __name__ == "__main__":
     from rsub import *
