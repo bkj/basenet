@@ -34,12 +34,13 @@ class BaseNet(nn.Module):
     
     def __init__(self, loss_fn=F.cross_entropy, verbose=False):
         super(BaseNet, self).__init__()
-        self.loss_fn = loss_fn
-        self.opt = None
+        self.loss_fn  = loss_fn
+        self.opt      = None
         self.progress = 0
-        self.epoch = 0
-        self.lr = -1
-        self.verbose = verbose
+        self.epoch    = 0
+        self.lr       = -1
+        self.verbose  = verbose
+        self._cuda    = False
     
     def cuda(self, device=None):
         self._cuda = True

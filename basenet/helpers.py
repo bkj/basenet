@@ -23,33 +23,21 @@ def set_seeds(seed=100):
     _ = random.seed(seed + 789)
 
 def to_numpy(x):
-    if isinstance(x, Variable):
+    if isinstance(x, np.ndarray):
+        return x
+    elif isinstance(x, Variable):
         return to_numpy(x.data)
-    
-    return x.cpu().numpy() if x.is_cuda else x.numpy()
+    else:
+        if x.is_cuda:
+            return x.cpu().numpy()
+        else:
+            return x.numpy()
 
 # --
 # From `fastai`
 
 def get_children(m):
     return m if isinstance(m, (list, tuple)) else list(m.children())
-
-# def apply_leaf(model, fn):
-#     children = get_children(model)
-#     if isinstance(model, nn.Module):
-#         fn(model)
-    
-#     if len(children) > 0:
-#         for layer in children:
-#             apply_leaf(layer, fn)
-
-# def _set_freeze(x, val):
-#     p.frozen = val
-#     for p in x.parameters():
-#         p.requires_grad = val
-
-# def set_freeze(model, val):
-#     apply_leaf(model, lambda x: _set_freeze(x, val))
 
 def set_freeze(x, mode):
     x.frozen = mode
@@ -59,6 +47,26 @@ def set_freeze(x, mode):
     for module in x.children():
         set_freeze(module, mode)
 
+def apply_init(m, init_fn):
+    def _cond_init(m, init_fn):
+        if not isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            if hasattr(m, 'weight'):
+                init_fn(m.weight)
+            
+            if hasattr(m, 'bias'):
+                m.bias.data.fill_(0.)
+    
+    m.apply(lambda x: _cond_init(x, init_fn))
 
-
-
+def get_num_features(model):
+    children = get_children(model)
+    if len(children) == 0:
+        return None
+    
+    for layer in reversed(children):
+        if hasattr(layer, 'num_features'):
+            return layer.num_features
+        
+        res = get_num_features(layer)
+        if res is not None:
+            return res
