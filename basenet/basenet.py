@@ -121,7 +121,7 @@ class BaseNet(nn.Module):
         else:
             gen = enumerate(loader)
             if self.verbose:
-                gen = tqdm(gen, total=len(loader))
+                gen = tqdm(gen, total=len(loader), desc='train_epoch:%s' % mode)
             
             avg_mom  = 0.98
             avg_loss = 0.0
@@ -159,7 +159,7 @@ class BaseNet(nn.Module):
         else:
             gen = enumerate(loader)
             if self.verbose:
-                gen = tqdm(gen, total=len(loader))
+                gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
             
             correct, total, loss_hist = 0, 0, []
             for batch_idx, (data, target) in gen:
