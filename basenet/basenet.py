@@ -93,6 +93,18 @@ class BaseNet(nn.Module):
         output = self(data)
         loss = self.loss_fn(output, target)
         loss.backward()
+        
+        # # <<
+        # total_norm = 0
+        # for p in self.parameters():
+        #     if p.grad is not None:
+        #         param_norm = p.grad.data.norm(2)
+        #         total_norm += param_norm ** 2
+        
+        # total_norm = total_norm ** (1. / 2)
+        # print("total_norm", total_norm)
+        # # >>
+        
         self.opt.step()
         
         return output, float(loss)

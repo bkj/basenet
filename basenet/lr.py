@@ -11,6 +11,7 @@ from __future__ import print_function, division
 import sys
 import copy
 import numpy as np
+from tqdm import tqdm
 
 import torch
 from torch import nn
@@ -125,10 +126,14 @@ class LRFind(object):
         # --
         # Setup LR schedule
         
+        if model.verbose:
+            print('LRFind.find: copying model')
+        
         model = copy.deepcopy(model)
         
         if lr_mults is not None:
             lr_init *= lr_mults
+            lr_max *= lr_mults # Correct?
         
         lr_scheduler = LRSchedule.exponential_increase(lr_init=lr_init, lr_max=lr_max, num_steps=len(dataloaders[mode]))
         
@@ -149,7 +154,12 @@ class LRFind(object):
         avg_loss = 0.   # For smooth_loss
         
         lr_hist, loss_hist = [], []
-        for batch_idx, (data, target) in enumerate(dataloaders[mode]):
+        
+        gen = enumerate(dataloaders[mode])
+        if model.verbose:
+            gen = tqdm(gen, total=len(dataloaders[mode]), desc='LRFind.find:')
+        
+        for batch_idx, (data, target) in gen:
             
             model.set_progress(batch_idx)
             
