@@ -193,6 +193,30 @@ class BaseNet(nn.Module):
                 "loss" : np.hstack(loss_hist),
             }
     
+    def predict(self, dataloaders, mode='val'):
+        _ = self.eval()
+        
+        all_output, all_target = [], []
+        loader = dataloaders[mode]
+        if loader is None:
+            return None
+        else:
+            gen = enumerate(loader)
+            if self.verbose:
+                gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
+            
+            for batch_idx, (data, target) in gen:
+                
+                data = Variable(data, volatile=True)
+                if self._cuda:
+                    data = data.cuda()
+                    
+                output = self(data)
+                all_output.append(output.data.cpu())
+                all_target.append(target)
+        
+        return torch.cat(all_output), torch.cat(all_target)
+    
     def save(self, outpath):
         torch.save(self.state_dict(), outpath)
     
