@@ -23,18 +23,20 @@ def set_seeds(seed=100):
     _ = torch.cuda.manual_seed(seed + 456)
     _ = random.seed(seed + 789)
 
+
 def to_numpy(x):
     if isinstance(x, np.ndarray):
         return x
     elif isinstance(x, float):
         return x
-    elif isinstance(x, Variable):
-        return to_numpy(x.data)
+    elif x.requires_grad:
+        return to_numpy(x.detach())
     else:
         if x.is_cuda:
             return x.cpu().numpy()
         else:
             return x.numpy()
+
 
 # --
 # From `fastai`

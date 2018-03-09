@@ -110,21 +110,22 @@ class BaseNet(nn.Module):
         return output, float(loss)
     
     def eval_batch(self, data, target):
-        data, target = Variable(data, volatile=True), Variable(target)
-        if self._cuda:
-            data, target = data.cuda(), target.cuda()
-        
-        _ = self.eval()
-        
-        output = self(data)
-        loss = self.loss_fn(output, target)
-        
-        return output, float(loss)
+        with torch.no_grad():
+            data, target = Variable(data), Variable(target)
+            if self._cuda:
+                data, target = data.cuda(), target.cuda()
+            
+            _ = self.eval()
+            
+            output = self(data)
+            loss = self.loss_fn(output, target)
+            
+            return output, float(loss)
     
     # --
     # Epoch steps
     
-    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
+    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf, debias_loss=False):
         assert self.opt is not None, "BaseWrapper: self.opt is None"
         
         loader = dataloaders[mode]
@@ -135,8 +136,10 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='train_epoch:%s' % mode)
             
-            avg_mom  = 0.98
-            avg_loss = 0.0
+            # if debias_loss:
+            #     avg_mom  = 0.98
+            #     avg_loss = 0.0
+            
             correct, total, loss_hist = 0, 0, []
             for batch_idx, (data, target) in gen:
                 self.set_progress(self.epoch + batch_idx / len(loader))
@@ -144,23 +147,23 @@ class BaseNet(nn.Module):
                 output, loss = self.train_batch(data, target)
                 loss_hist.append(loss)
                 
-                avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
-                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
+                # avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
+                # debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
                 
-                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-                total += data.shape[0]
+                # correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
+                # total += data.shape[0]
                 
                 if batch_idx > num_batches:
                     break
                 
-                if self.verbose:
-                    gen.set_postfix(acc=correct / total)
+                # if self.verbose:
+                #     gen.set_postfix(acc=correct / total)
             
             self.epoch += 1
             return {
-                "acc"  : correct / total,
+                # "acc"  : correct / total,
                 "loss" : np.hstack(loss_hist),
-                "debias_loss" : debias_loss,
+                # "debias_loss" : debias_loss,
             }
         
     def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
@@ -206,14 +209,14 @@ class BaseNet(nn.Module):
                 gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
             
             for batch_idx, (data, target) in gen:
-                
-                data = Variable(data, volatile=True)
-                if self._cuda:
-                    data = data.cuda()
-                    
-                output = self(data)
-                all_output.append(output.data.cpu())
-                all_target.append(target)
+                with torch.no_grad():
+                    data = Variable(data)
+                    if self._cuda:
+                        data = data.cuda()
+                        
+                    output = self(data)
+                    all_output.append(output.data.cpu())
+                    all_target.append(target)
         
         return torch.cat(all_output), torch.cat(all_target)
     
