@@ -17,6 +17,8 @@ from torch.autograd import Variable
 from .helpers import to_numpy
 from .lr import LRSchedule
 
+TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+
 # --
 # Helpers
 
@@ -104,17 +106,22 @@ class BaseNet(nn.Module):
         return output, float(loss)
     
     def eval_batch(self, data, target):
-        with torch.no_grad():
-            data, target = Variable(data), Variable(target)
-            if self._cuda:
-                data, target = data.cuda(), target.cuda()
-            
-            _ = self.eval()
-            
-            output = self(data)
-            loss = self.loss_fn(output, target)
-            
-            return output, float(loss)
+        if TORCH_VERSION_4:
+            data = Variable(data, requires_grad=False)
+            target = Variable(target, requires_grad=False)
+        else:
+            data = Variable(data, volatile=True)
+            target = Variable(target, volatile=True)
+        
+        if self._cuda:
+            data, target = data.cuda(), target.cuda()
+        
+        _ = self.eval()
+        
+        output = self(data)
+        loss = self.loss_fn(output, target)
+        
+        return output, float(loss)
     
     # --
     # Epoch steps
@@ -202,14 +209,17 @@ class BaseNet(nn.Module):
                 gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
             
             for batch_idx, (data, target) in gen:
-                with torch.no_grad():
-                    data = Variable(data)
-                    if self._cuda:
-                        data = data.cuda()
-                        
-                    output = self(data)
-                    all_output.append(output.data.cpu())
-                    all_target.append(target)
+                if TORCH_VERSION_4:
+                    data = Variable(data, requires_grad=False)
+                else:
+                    data = Variable(data, volatile=True)
+                
+                if self._cuda:
+                    data = data.cuda()
+                    
+                output = self(data)
+                all_output.append(output.data.cpu())
+                all_target.append(target)
         
         return torch.cat(all_output), torch.cat(all_target)
     
