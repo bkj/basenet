@@ -55,7 +55,9 @@ class BaseNet(nn.Module):
     # --
     # Optimization
     
-    def init_optimizer(self, opt, params, lr_scheduler=None, **kwargs):
+    def init_optimizer(self, opt, params, lr_scheduler=None, clip_grad_norm=0, **kwargs):
+        self.clip_grad_norm = clip_grad_norm
+        
         if lr_scheduler is not None:
             assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR and lr_scheduler"
             self.lr_scheduler = lr_scheduler
@@ -94,16 +96,8 @@ class BaseNet(nn.Module):
         loss = self.loss_fn(output, target)
         loss.backward()
         
-        # # <<
-        # total_norm = 0
-        # for p in self.parameters():
-        #     if p.grad is not None:
-        #         param_norm = p.grad.data.norm(2)
-        #         total_norm += param_norm ** 2
-        
-        # total_norm = total_norm ** (1. / 2)
-        # print("total_norm", total_norm)
-        # # >>
+        if self.clip_grad_norm > 0:
+            torch.nn.utils.clip_grad_norm(self.parameters(), self.clip_grad_norm)
         
         self.opt.step()
         
@@ -125,7 +119,7 @@ class BaseNet(nn.Module):
     # --
     # Epoch steps
     
-    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf, debias_loss=False):
+    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
         assert self.opt is not None, "BaseWrapper: self.opt is None"
         
         loader = dataloaders[mode]
@@ -136,9 +130,8 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='train_epoch:%s' % mode)
             
-            # if debias_loss:
-            #     avg_mom  = 0.98
-            #     avg_loss = 0.0
+            avg_mom  = 0.98
+            avg_loss = 0.0
             
             correct, total, loss_hist = 0, 0, []
             for batch_idx, (data, target) in gen:
@@ -147,23 +140,23 @@ class BaseNet(nn.Module):
                 output, loss = self.train_batch(data, target)
                 loss_hist.append(loss)
                 
-                # avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
-                # debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
+                avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
+                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
                 
-                # correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-                # total += data.shape[0]
+                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
+                total += data.shape[0]
                 
                 if batch_idx > num_batches:
                     break
                 
-                # if self.verbose:
-                #     gen.set_postfix(acc=correct / total)
+                if self.verbose:
+                    gen.set_postfix(acc=correct / total)
             
             self.epoch += 1
             return {
-                # "acc"  : correct / total,
+                "acc"  : correct / total,
                 "loss" : np.hstack(loss_hist),
-                # "debias_loss" : debias_loss,
+                "debias_loss" : debias_loss,
             }
         
     def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):

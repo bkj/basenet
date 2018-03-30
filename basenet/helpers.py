@@ -14,6 +14,8 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 
+TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+
 # --
 # Utils
 
@@ -24,19 +26,36 @@ def set_seeds(seed=100):
     _ = random.seed(seed + 789)
 
 
-def to_numpy(x):
-    if isinstance(x, np.ndarray):
-        return x
-    elif isinstance(x, float):
-        return x
-    elif x.requires_grad:
-        return to_numpy(x.detach())
-    else:
-        if x.is_cuda:
-            return x.cpu().numpy()
+if TORCH_VERSION_4:
+    def to_numpy(x):
+        if isinstance(x, np.ndarray):
+            return x
+        elif isinstance(x, float):
+            return x
+        elif isinstance(x, int):
+            return x
+        elif x.requires_grad:
+            return to_numpy(x.detach())
         else:
-            return x.numpy()
-
+            if x.is_cuda:
+                return x.cpu().numpy()
+            else:
+                return x.numpy()
+else:
+    def to_numpy(x):
+        if isinstance(x, np.ndarray):
+            return x
+        elif isinstance(x, float):
+            return x
+        elif isinstance(x, int):
+            return x
+        elif isinstance(x, Variable):
+            return to_numpy(x.data)
+        else:
+            if x.is_cuda:
+                return x.cpu().numpy()
+            else:
+                return x.numpy()
 
 # --
 # From `fastai`
