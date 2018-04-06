@@ -28,11 +28,7 @@ def set_seeds(seed=100):
 
 if TORCH_VERSION_4:
     def to_numpy(x):
-        if isinstance(x, np.ndarray):
-            return x
-        elif isinstance(x, float):
-            return x
-        elif isinstance(x, int):
+        if type(x) in [np.ndarray, float, int]:
             return x
         elif x.requires_grad:
             return to_numpy(x.detach())
@@ -43,11 +39,7 @@ if TORCH_VERSION_4:
                 return x.numpy()
 else:
     def to_numpy(x):
-        if isinstance(x, np.ndarray):
-            return x
-        elif isinstance(x, float):
-            return x
-        elif isinstance(x, int):
+        if type(x) in [np.ndarray, float, int]:
             return x
         elif isinstance(x, Variable):
             return to_numpy(x.data)
