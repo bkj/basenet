@@ -90,7 +90,6 @@ def get_num_features(model):
         if res is not None:
             return res
 
-
 def parameters_from_children(children):
     parameters = [list(c.parameters()) for c in get_children(children)]
     return reduce(lambda a,b: a + b, parameters)

@@ -1,3 +1,6 @@
+examples/data/*
+examples/results/*
 basenet.egg-info/*
 build/*
 dist/*
+*__pycache__*
