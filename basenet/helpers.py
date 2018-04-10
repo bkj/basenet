@@ -55,6 +55,7 @@ else:
 def get_children(m):
     return m if isinstance(m, (list, tuple)) else list(m.children())
 
+
 def set_freeze(x, mode):
     x.frozen = mode
     for p in x.parameters():
@@ -62,6 +63,7 @@ def set_freeze(x, mode):
     
     for module in x.children():
         set_freeze(module, mode)
+
 
 def apply_init(m, init_fn):
     def _cond_init(m, init_fn):
@@ -73,6 +75,7 @@ def apply_init(m, init_fn):
                 m.bias.data.fill_(0.)
     
     m.apply(lambda x: _cond_init(x, init_fn))
+
 
 def get_num_features(model):
     children = get_children(model)
