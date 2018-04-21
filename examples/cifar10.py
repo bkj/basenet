@@ -15,6 +15,8 @@ import sys
 import json
 import argparse
 import numpy as np
+from time import time
+from PIL import Image
 
 from basenet import BaseNet
 from basenet.lr import LRSchedule
@@ -33,10 +35,15 @@ from torchvision import transforms, datasets
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--lr-schedule', type=str, default='linear')
+    parser.add_argument('--epochs', type=int, default=30)
+    parser.add_argument('--extra', type=int, default=5)
+    parser.add_argument('--burnout', type=int, default=5)
+    parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
     parser.add_argument('--lr-init', type=float, default=0.1)
-    parser.add_argument('--seed', type=int, default=123)
+    parser.add_argument('--weight-decay', type=float, default=5e-4)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
     return parser.parse_args()
 
@@ -55,7 +62,11 @@ cifar10_stats = {
 }
 
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
+    transforms.Lambda(lambda x: np.asarray(x)),
+    transforms.Lambda(lambda x: np.pad(x, [(4, 4), (4, 4), (0, 0)], mode='reflect')),
+    transforms.Lambda(lambda x: Image.fromarray(x)),
+    transforms.RandomCrop(32),
+    
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     transforms.Normalize(cifar10_stats['mean'], cifar10_stats['std']),
@@ -74,17 +85,17 @@ except:
 
 trainloader = torch.utils.data.DataLoader(
     trainset,
-    batch_size=128,
+    batch_size=args.batch_size,
     shuffle=True,
-    num_workers=8,
+    num_workers=16,
     pin_memory=True,
 )
 
 testloader = torch.utils.data.DataLoader(
     testset,
-    batch_size=256,
+    batch_size=512,
     shuffle=False,
-    num_workers=8,
+    num_workers=16,
     pin_memory=True,
 )
 
@@ -136,7 +147,7 @@ class ResNet18(BaseNet):
             self._make_layer(64, 64, num_blocks[0], stride=1),
             self._make_layer(64, 128, num_blocks[1], stride=2),
             self._make_layer(128, 256, num_blocks[2], stride=2),
-            self._make_layer(256, 512, num_blocks[3], stride=2),
+            self._make_layer(256, 256, num_blocks[3], stride=2),
         )
         
         self.classifier = nn.Linear(512, num_classes)
@@ -152,12 +163,18 @@ class ResNet18(BaseNet):
         return nn.Sequential(*layers)
     
     def forward(self, x):
-        x = self.prep(x)
+        x = self.prep(x.half())
         
         x = self.layers(x)
         
-        x = F.adaptive_avg_pool2d(x, (1, 1))
-        x = x.view(x.size(0), -1)
+        x_avg = F.adaptive_avg_pool2d(x, (1, 1))
+        x_avg = x_avg.view(x_avg.size(0), -1)
+        
+        x_max = F.adaptive_max_pool2d(x, (1, 1))
+        x_max = x_max.view(x_max.size(0), -1)
+        
+        x = torch.cat([x_avg, x_max], dim=-1)
+        
         x = self.classifier(x)
         
         return x
@@ -167,35 +184,36 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18().cuda()
+model = ResNet18().cuda().half()
 print(model, file=sys.stderr)
-model.verbose = True
 
 # --
 # Initialize optimizer
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(LRSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs)
+lr_scheduler = getattr(LRSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs, extra=args.extra)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),
     lr_scheduler=lr_scheduler,
-    momentum=0.9,
-    weight_decay=5e-4,
+    momentum=args.momentum,
+    weight_decay=args.weight_decay,
+    nesterov=True,
 )
 
 # --
 # Train
 
 print('cifar10.py: training...', file=sys.stderr)
-for epoch in range(args.epochs):
+t = time()
+for epoch in range(args.epochs + args.extra + args.burnout):
     train = model.train_epoch(dataloaders, mode='train')
     test  = model.eval_epoch(dataloaders, mode='test')
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.lr,
-        "train_acc" : float(train['acc']),
         "test_acc"  : float(test['acc']),
+        "time"      : time() - t,
     }))
     sys.stdout.flush()

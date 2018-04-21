@@ -137,34 +137,34 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='train_epoch:%s' % mode)
             
-            avg_mom  = 0.98
-            avg_loss = 0.0
+            # avg_mom  = 0.98
+            # avg_loss = 0.0
             
             correct, total, loss_hist = 0, 0, []
             for batch_idx, (data, target) in gen:
                 self.set_progress(self.epoch + batch_idx / len(loader))
                 
                 output, loss = self.train_batch(data, target)
-                loss_hist.append(loss)
+                # loss_hist.append(loss)
                 
-                avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
-                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
+                # avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
+                # debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
                 
-                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-                total += data.shape[0]
+                # correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
+                # total += data.shape[0]
                 
-                if batch_idx > num_batches:
-                    break
+                # if batch_idx > num_batches:
+                #     break
                 
-                if self.verbose:
-                    gen.set_postfix(acc=correct / total)
+                # if self.verbose:
+                #     gen.set_postfix(acc=correct / total)
             
             self.epoch += 1
-            return {
-                "acc"  : correct / total,
-                "loss" : np.hstack(loss_hist),
-                "debias_loss" : debias_loss,
-            }
+            # return {
+            #     "acc"  : correct / total,
+            #     "loss" : np.hstack(loss_hist),
+            #     "debias_loss" : debias_loss,
+            # }
         
     def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
         
@@ -182,7 +182,7 @@ class BaseNet(nn.Module):
                 output, loss = self.eval_batch(data, target)
                 loss_hist.append(loss)
                 
-                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
+                correct += (to_numpy(output.float()).argmax(axis=1) == to_numpy(target)).sum()
                 total += data.shape[0]
                 
                 if batch_idx > num_batches:
