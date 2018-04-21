@@ -9,12 +9,12 @@
     "costPerHour": 3.060,
     "timestamp": "2018-04-20",
     "misc": {
-        "comments" : "Hit 0.94 threshold in 6/7 runs. Reporting approximately median run here."
+        "comments" : "Hit 0.94 threshold in 6/7 runs. Reporting approximately median run here.",
         "commandLine" : "./cifar10.sh",
         "params" : {
             "optimizer" : "sgd w/ nesterov momentum",
             "epochs" : 40,
-            "lr_schedule" : "one cycle per Leslie Smith -- increase from 0 to 0.1 linearly over 15 epochs, back to 0.005 over 15 epochs, then down to 0 over 5 epochs.  Any extra time spent at 0.0005."
+            "lr_schedule" : "one cycle per Leslie Smith -- increase from 0 to 0.1 linearly over 15 epochs, back to 0.005 over 15 epochs, then down to 0 over 5 epochs.  Any extra time spent at 0.0005.",
             "weight_decay" : 5e-4,
             "momentum" : 0.9,
             "batch_size" : 128,
