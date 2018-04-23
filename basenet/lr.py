@@ -28,6 +28,11 @@ def power_sum(base, k):
 def inv_power_sum(x, base):
     return np.log(x * (base - 1) + 1) / np.log(base) - 1
 
+
+def linterp(x, start_x, end_x, start_y, end_y):
+    return start_y + (x - start_x) / (end_x - start_x) * (end_y - start_y)
+
+
 # --
 
 class LRSchedule(object):
@@ -80,6 +85,28 @@ class LRSchedule(object):
                 return low_lr * float(extra - (progress - epochs)) / extra
             else:
                 return low_lr / 10
+        
+        return f
+    
+    @staticmethod
+    def piecewise_linear(breaks, vals, **kwargs):
+        assert len(breaks) == len(vals)
+        
+        def _f(progress):
+            if progress < breaks[0]:
+                return vals[0]
+            
+            for i in range(1, len(breaks)):
+                if progress < breaks[i]:
+                    return linterp(progress, breaks[i - 1], breaks[i], vals[i - 1], vals[i])
+            
+            return vals[-1]
+        
+        def f(x):
+            if isinstance(x, list) or isinstance(x, np.ndarray):
+                return [_f(xx) for xx in x]
+            else:
+                return _f(x)
         
         return f
     
@@ -229,8 +256,14 @@ if __name__ == "__main__":
     # show_plot()
     
     # Linear cycle
-    lr = LRSchedule.linear_cycle(epochs=30, lr_init=0.1, extra=10)
-    lrs = np.vstack([lr(i) for i in np.linspace(0, 40, 1000)])
+    # lr = LRSchedule.linear_cycle(epochs=30, lr_init=0.1, extra=10)
+    # lrs = np.vstack([lr(i) for i in np.linspace(0, 40, 1000)])
+    # _ = plt.plot(lrs)
+    # show_plot()
+    
+    # Piecewise linear
+    lr = LRSchedule.piecewise_linear(breaks=[0, 5, 10, 15], vals=[0, 1, 0.25, 0])
+    lrs = np.vstack([lr(i) for i in np.linspace(-1, 16, 1000)])
     _ = plt.plot(lrs)
     show_plot()
     
