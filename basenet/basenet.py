@@ -15,7 +15,7 @@ from torch.nn import functional as F
 from torch.autograd import Variable
 
 from .helpers import to_numpy
-from .lr import LRSchedule
+from .hp_schedule import HPSchedule
 
 TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
 
@@ -36,13 +36,18 @@ class BaseNet(nn.Module):
     
     def __init__(self, loss_fn=F.cross_entropy, verbose=False):
         super(BaseNet, self).__init__()
-        self.loss_fn  = loss_fn
-        self.opt      = None
+        self.loss_fn = loss_fn
+        
+        self.opt          = None
+        self.hp_scheduler = None
+        self.hp       = None
+        
         self.progress = 0
         self.epoch    = 0
-        self.lr       = -1
-        self.verbose  = verbose
-        self._cuda    = False
+        
+        self.verbose = verbose
+        
+        self._cuda = False
     
     def cuda(self, device=None):
         self._cuda = True
@@ -57,24 +62,24 @@ class BaseNet(nn.Module):
     # --
     # Optimization
     
-    def init_optimizer(self, opt, params, lr_scheduler=None, clip_grad_norm=0, **kwargs):
+    def init_optimizer(self, opt, params, hp_scheduler=None, clip_grad_norm=0, **kwargs):
         self.clip_grad_norm = clip_grad_norm
+        self.hp_scheduler = hp_scheduler
         
-        if lr_scheduler is not None:
-            assert 'lr' not in kwargs, "BaseWrapper.init_optimizer: can't set LR and lr_scheduler"
-            self.lr_scheduler = lr_scheduler
-            self.opt = opt(params, lr=self.lr_scheduler(0), **kwargs)
-            self.set_progress(0)
-        else:
-            self.lr_scheduler = None
-            self.opt = opt(params, **kwargs)
+        if hp_scheduler is not None:
+            if hp_name, scheduler in hp_scheduler.items():
+                kwargs[hp_name] = scheduler(0)
+        
+        self.opt = opt(params, **kwargs)
+        self.set_progress(0)
     
     def set_progress(self, progress):
         self.progress = progress
         self.epoch = np.floor(progress)
-        if self.lr_scheduler is not None:
-            self.lr = self.lr_scheduler(progress)
-            LRSchedule.set_lr(self.opt, self.lr)
+        
+        if self.hp_scheduler is not None:
+            self.hp = dict([(hp_name, scheduler(progress)) for hp_name,scheduler in self.hp_scheduler.items()])
+            HPSchedule.set_hp(self.opt, self.hp)
     
     # --
     # Training states

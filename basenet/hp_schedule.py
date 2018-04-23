@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 """
-    lr.py
+    hp_schedule.py
     
-    learning rate scheduler
+    Optimizer hyperparameter scheduler
 """
 
 from __future__ import print_function, division
@@ -32,75 +32,78 @@ def inv_power_sum(x, base):
 def linterp(x, start_x, end_x, start_y, end_y):
     return start_y + (x - start_x) / (end_x - start_x) * (end_y - start_y)
 
+def _set_hp(optimizer, hp_name, hp_hp):
+    if isinstance(hp_hp, float):
+        hp_hp = [hp_hp] * num_param_groups
+    else:
+        assert len(hp_hp) == num_param_groups, ("len(%s) != num_param_groups" % hp_name)
+    
+    for i, param_group in enumerate(optimizer.param_groups):
+        param_group[hp_name] = hp_hp[i]
 
 # --
 
-class LRSchedule(object):
+class HPSchedule(object):
     
     @staticmethod
-    def set_lr(optimizer, lr):
+    def set_hp(optimizer, hp):
         num_param_groups = len(list(optimizer.param_groups))
         
-        if isinstance(lr, float):
-            lr = [lr] * num_param_groups
-        else:
-            assert len(lr) == num_param_groups, "len(lr) != num_param_groups"
-        
-        for i, param_group in enumerate(optimizer.param_groups):
-            param_group['lr'] = lr[i]
+        for hp_name, hp_hp in hp.items():
+            _set_hp(optimizer, hp_name, hp_hp)
     
     @staticmethod
-    def constant(lr_init=0.1, **kwargs):
+    def constant(hp_init=0.1, **kwargs):
         def f(progress):
-            return lr_init
+            return hp_init
         
         return f
     
     @staticmethod
-    def step(lr_init=0.1, breaks=(150, 250), factors=(0.1, 0.1), **kwargs):
+    def step(hp_init=0.1, breaks=(150, 250), factors=(0.1, 0.1), **kwargs):
         """ Step function learning rate annealing """
         assert len(breaks) == len(factors)
         breaks = np.array(breaks)
         def f(progress):
-            return lr_init * np.prod(factors[:((progress >= breaks).sum())])
+            return hp_init * np.prod(factors[:((progress >= breaks).sum())])
         
         return f
     
     @staticmethod
-    def linear(lr_init=0.1, epochs=10, **kwargs):
+    def linear(hp_init=0.1, epochs=10, **kwargs):
         def f(progress):
             """ Linear learning rate annealing """
-            return lr_init * float(epochs - progress) / epochs
+            return hp_init * float(epochs - progress) / epochs
         
         return f
     
     @staticmethod
-    def linear_cycle(lr_init=0.1, epochs=10, low_lr=0.005, extra=5, **kwargs):
+    def linear_cycle(hp_init=0.1, epochs=10, low_hp=0.005, extra=5, **kwargs):
         def f(progress):
             if progress < epochs / 2:
-                return 2 * lr_init * (1 - float(epochs - progress) / epochs)
+                return 2 * hp_init * (1 - float(epochs - progress) / epochs)
             elif progress <= epochs:
-                return low_lr + 2 * lr_init * float(epochs - progress) / epochs
+                return low_hp + 2 * hp_init * float(epochs - progress) / epochs
             elif progress <= epochs + extra:
-                return low_lr * float(extra - (progress - epochs)) / extra
+                return low_hp * float(extra - (progress - epochs)) / extra
             else:
-                return low_lr / 10
+                return low_hp / 10
         
         return f
     
     @staticmethod
-    def piecewise_linear(breaks, vals, **kwargs):
-        assert len(breaks) == len(vals)
+    def piecewise_linear(breaks, hps, **kwargs):
+        assert len(breaks) == len(hps)
         
         def _f(progress):
             if progress < breaks[0]:
-                return vals[0]
+                return hps[0]
             
             for i in range(1, len(breaks)):
                 if progress < breaks[i]:
-                    return linterp(progress, breaks[i - 1], breaks[i], vals[i - 1], vals[i])
+                    return linterp(progress, breaks[i - 1], breaks[i], hps[i - 1], hps[i])
             
-            return vals[-1]
+            return hps[-1]
         
         def f(x):
             if isinstance(x, list) or isinstance(x, np.ndarray):
@@ -111,15 +114,15 @@ class LRSchedule(object):
         return f
     
     @staticmethod
-    def cyclical(lr_init=0.1, lr_burn_in=0.05, epochs=10, **kwargs):
+    def cyclical(hp_init=0.1, hp_burn_in=0.05, epochs=10, **kwargs):
         def f(progress):
             """ Cyclical learning rate w/ annealing """
-            return lr_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
+            return hp_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
         
         return f
     
     @staticmethod
-    def sgdr(lr_init=0.1, period_length=50, lr_min=0, t_mult=1, **kwargs):
+    def sgdr(hp_init=0.1, period_length=50, hp_min=0, t_mult=1, **kwargs):
         def f(progress):
             """ SGDR learning rate annealing """
             if t_mult > 1:
@@ -130,53 +133,53 @@ class LRSchedule(object):
             else:
                 period_progress = (progress % period_length) / period_length
             
-            return lr_min + 0.5 * (lr_init - lr_min) * (1 + np.cos(period_progress * np.pi))
+            return hp_min + 0.5 * (hp_init - hp_min) * (1 + np.cos(period_progress * np.pi))
         
         return f
     
     @staticmethod
-    def burnin_sgdr(lr_init=0.1, burnin_progress=0.15, burnin_factor=100, **kwargs):
-        sgdr = LRSchedule.sgdr(lr_init=lr_init, **kwargs)
+    def burnin_sgdr(hp_init=0.1, burnin_progress=0.15, burnin_factor=100, **kwargs):
+        sgdr = HPSchedule.sgdr(hp_init=hp_init, **kwargs)
         
         def f(progress):
             """ SGDR learning rate annealing, w/ constant burnin period """
             if progress < burnin_progress:
-                return lr_init / burnin_factor
+                return hp_init / burnin_factor
             else:
                 return sgdr(progress)
         
         return f
     
     @staticmethod
-    def exponential_increase(lr_init=0.1, lr_max=10, num_steps=100, **kwargs):
-        mult = (lr_max / lr_init) ** (1 / num_steps)
+    def exponential_increase(hp_init=0.1, hp_max=10, num_steps=100, **kwargs):
+        mult = (hp_max / hp_init) ** (1 / num_steps)
         def f(progress):
-            return lr_init * mult ** progress
+            return hp_init * mult ** progress
             
         return f
 
 # --
-# LR Finder
+# HP Finder
 
-class LRFind(object):
+class HPFind(object):
     
     @staticmethod
-    def find(model, dataloaders, lr_init=1e-5, lr_max=10, lr_mults=None, params=None, mode='train', smooth_loss=False):
+    def find(model, dataloaders, hp_init=1e-5, hp_max=10, hp_mults=None, params=None, mode='train', smooth_loss=False):
         assert mode in dataloaders, '%s not in loader' % mode
         
         # --
-        # Setup LR schedule
+        # Setup HP schedule
         
         if model.verbose:
-            print('LRFind.find: copying model')
+            print('HPFind.find: copying model')
         
         model = copy.deepcopy(model)
         
-        if lr_mults is not None:
-            lr_init *= lr_mults
-            lr_max *= lr_mults # Correct?
+        if hp_mults is not None:
+            hp_init *= hp_mults
+            hp_max *= hp_mults # Correct?
         
-        lr_scheduler = LRSchedule.exponential_increase(lr_init=lr_init, lr_max=lr_max, num_steps=len(dataloaders[mode]))
+        hp_scheduler = HPSchedule.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
         
         if params is None:
             params = model.parameters()
@@ -184,7 +187,7 @@ class LRFind(object):
         model.init_optimizer(
             opt=torch.optim.SGD,
             params=params,
-            lr_scheduler=lr_scheduler,
+            hp_scheduler=hp_scheduler,
             momentum=0.9
         )
         
@@ -194,11 +197,11 @@ class LRFind(object):
         avg_mom  = 0.98 # For smooth_loss
         avg_loss = 0.   # For smooth_loss
         
-        lr_hist, loss_hist = [], []
+        hp_hist, loss_hist = [], []
         
         gen = enumerate(dataloaders[mode])
         if model.verbose:
-            gen = tqdm(gen, total=len(dataloaders[mode]), desc='LRFind.find:')
+            gen = tqdm(gen, total=len(dataloaders[mode]), desc='HPFind.find:')
         
         for batch_idx, (data, target) in gen:
             
@@ -212,29 +215,29 @@ class LRFind(object):
             else:
                 loss_hist.append(loss)
             
-            lr_hist.append(model.lr)
+            hp_hist.append(model.hp)
             
             if loss > np.min(loss_hist) * 4:
                 break
         
-        return np.vstack(lr_hist), loss_hist
+        return np.vstack(hp_hist), loss_hist
     
     @staticmethod
-    def get_optimal_lr(lr_hist, loss_hist, c=10, burnin=5):
+    def get_optimal_hp(hp_hist, loss_hist, c=10, burnin=5):
         """
             For now, gets smallest loss and goes back an order of magnitude
             Maybe it'd be better to use the point w/ max slope?  Or not use smoothed estimate? 
         """
-        lr_hist, loss_hist = lr_hist[burnin:], loss_hist[burnin:]
+        hp_hist, loss_hist = hp_hist[burnin:], loss_hist[burnin:]
         
         min_loss_idx = np.array(loss_hist).argmin()
-        min_loss_lr = lr_hist[min_loss_idx]
-        opt_lr = min_loss_lr / c
+        min_loss_hp = hp_hist[min_loss_idx]
+        opt_hp = min_loss_hp / c
         
-        if len(opt_lr) == 1:
-            opt_lr = opt_lr[0]
+        if len(opt_hp) == 1:
+            opt_hp = opt_hp[0]
         
-        return opt_lr
+        return opt_hp
 
 
 if __name__ == "__main__":
@@ -242,49 +245,49 @@ if __name__ == "__main__":
     from matplotlib import pyplot as plt
     
     # # Step
-    # lr = LRSchedule.step(lr_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(lrs[:,0])
-    # _ = plt.plot(lrs[:,1])
+    # hp = HPSchedule.step(hp_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
     # show_plot()
     
     # # Linear
-    # lr = LRSchedule.linear(epochs=30, lr_init=np.array([1, 2]))
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(lrs[:,0])
-    # _ = plt.plot(lrs[:,1])
+    # hp = HPSchedule.linear(epochs=30, hp_init=np.array([1, 2]))
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
     # show_plot()
     
     # Linear cycle
-    # lr = LRSchedule.linear_cycle(epochs=30, lr_init=0.1, extra=10)
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 40, 1000)])
-    # _ = plt.plot(lrs)
+    # hp = HPSchedule.linear_cycle(epochs=30, hp_init=0.1, extra=10)
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 40, 1000)])
+    # _ = plt.plot(hps)
     # show_plot()
     
     # Piecewise linear
-    lr = LRSchedule.piecewise_linear(breaks=[0, 5, 10, 15], vals=[0, 1, 0.25, 0])
-    lrs = np.vstack([lr(i) for i in np.linspace(-1, 16, 1000)])
-    _ = plt.plot(lrs)
+    hp = HPSchedule.piecewise_linear(breaks=[0, 5, 10, 15], hps=[0, 1, 0.25, 0])
+    hps = np.vstack([hp(i) for i in np.linspace(-1, 16, 1000)])
+    _ = plt.plot(hps)
     show_plot()
     
     # # Cyclical
-    # lr = LRSchedule.cyclical(epochs=30, lr_init=np.array([1, 2]))
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(lrs[:,0])
-    # _ = plt.plot(lrs[:,1])
+    # hp = HPSchedule.cyclical(epochs=30, hp_init=np.array([1, 2]))
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
     # show_plot()
     
     # # SGDR
-    # lr = LRSchedule.sgdr(period_length=10, t_mult=2, lr_init=np.array([1, 2]))
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(lrs[:,0])
-    # _ = plt.plot(lrs[:,1])
+    # hp = HPSchedule.sgdr(period_length=10, t_mult=2, hp_init=np.array([1, 2]))
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
     # show_plot()
     
     # exponential increase (for setting learning rates)
-    # lr = LRSchedule.exponential_increase(lr_init=np.array([1e-5, 1e-4]), lr_max=10, num_steps=100)
-    # lrs = np.vstack([lr(i) for i in np.linspace(0, 100, 1000)])
-    # _ = plt.plot(lrs[:,0])
-    # _ = plt.plot(lrs[:,1])
+    # hp = HPSchedule.exponential_increase(hp_init=np.array([1e-5, 1e-4]), hp_max=10, num_steps=100)
+    # hps = np.vstack([hp(i) for i in np.linspace(0, 100, 1000)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
     # _ = plt.yscale('log')
     # show_plot()
