@@ -29,34 +29,34 @@ def _set_train(x, mode):
     
     return x
 
+def _to_device(x, device):
+    if isinstance(x, tuple) or isinstance(x, list):
+        return [xx.to(device) for xx in x]
+    else:
+        return x.to(device)
+
 # --
 # Model
 
 class BaseNet(nn.Module):
     
     def __init__(self, loss_fn=F.cross_entropy, verbose=False):
-        super(BaseNet, self).__init__()
+        super().__init__()
         self.loss_fn = loss_fn
         
         self.opt          = None
         self.hp_scheduler = None
-        self.hp       = None
+        self.hp           = None
         
         self.progress = 0
         self.epoch    = 0
         
         self.verbose = verbose
-        
-        self._cuda = False
+        self.device = None
     
-    def cuda(self, device=None):
-        self._cuda = True
-        super().cuda(device=device)
-        return self
-    
-    def cpu(self):
-        self._cuda = False
-        super().cpu()
+    def to(self, device=None):
+        self.device = device
+        super().to(device=device)
         return self
     
     # --
@@ -92,11 +92,9 @@ class BaseNet(nn.Module):
     # Batch steps
     
     def train_batch(self, data, target):
-        data, target = Variable(data), Variable(target)
-        if self._cuda:
-            data, target = data.cuda(), target.cuda()
-        
         _ = self.train()
+        
+        data, target = _to_device(data, self.device), _to_device(target, self.device)
         
         self.opt.zero_grad()
         output = self(data)
@@ -110,53 +108,41 @@ class BaseNet(nn.Module):
         
         return output, float(loss)
     
+    
     def eval_batch(self, data, target):
-        if TORCH_VERSION_4:
-            data = Variable(data, requires_grad=False)
-            target = Variable(target, requires_grad=False)
-        else:
-            data = Variable(data, volatile=True)
-            target = Variable(target, volatile=True)
-        
-        if self._cuda:
-            data, target = data.cuda(), target.cuda()
-        
         _ = self.eval()
         
-        output = self(data)
-        loss = self.loss_fn(output, target)
-        
-        return output, float(loss)
+        with torch.no_grad():
+            data, target = _to_device(data, self.device), _to_device(target, self.device)
+            
+            output = self(data)
+            loss = self.loss_fn(output, target)
+            
+            return output, float(loss)
     
     # --
     # Epoch steps
     
-    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
-        assert self.opt is not None, "BaseWrapper: self.opt is None"
-        
+    def _run_epoch(self, dataloaders, mode, num_batches, batch_fn, set_progress, desc):
         loader = dataloaders[mode]
         if loader is None:
             return None
         else:
             gen = enumerate(loader)
             if self.verbose:
-                gen = tqdm(gen, total=len(loader), desc='train_epoch:%s' % mode)
+                gen = tqdm(gen, total=len(loader), desc='%s:%s' % (desc, mode))
             
-            avg_mom  = 0.98
-            avg_loss = 0.0
             
-            correct, total, loss_hist = 0, 0, []
+            correct, total, loss_hist = 0, 0, [None] * len(loader)
             for batch_idx, (data, target) in gen:
-                self.set_progress(self.epoch + batch_idx / len(loader))
+                if set_progress:
+                    self.set_progress(self.epoch + batch_idx / len(loader))
                 
-                output, loss = self.train_batch(data, target)
-                loss_hist.append(loss)
+                output, loss = batch_fn(data, target)
+                loss_hist[batch_idx] = loss
                 
-                avg_loss = avg_loss * avg_mom + loss * (1 - avg_mom)
-                debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
-                
-                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-                total += data.shape[0]
+                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target[0])).sum()
+                total   += data.shape[0]
                 
                 if batch_idx > num_batches:
                     break
@@ -164,66 +150,58 @@ class BaseNet(nn.Module):
                 if self.verbose:
                     gen.set_postfix(acc=correct / total)
             
-            self.epoch += 1
-            return {
-                "acc"         : float(correct / total),
-                "loss"        : list(map(float, loss_hist)),
-                "debias_loss" : float(debias_loss),
-            }
-        
-    def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
-        
-        loader = dataloaders[mode]
-        if loader is None:
-            return None
-        else:
-            gen = enumerate(loader)
-            if self.verbose:
-                gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
-            
-            correct, total, loss_hist = 0, 0, []
-            for batch_idx, (data, target) in gen:
-                
-                output, loss = self.eval_batch(data, target)
-                loss_hist.append(loss)
-                
-                correct += (to_numpy(output.float()).argmax(axis=1) == to_numpy(target)).sum()
-                total += data.shape[0]
-                
-                if batch_idx > num_batches:
-                    break
-                
-                if self.verbose:
-                    gen.set_postfix(acc=correct / total)
+            if set_progress:
+                self.epoch += 1
             
             return {
                 "acc"  : float(correct / total),
                 "loss" : list(map(float, loss_hist)),
             }
     
+    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
+        assert self.opt is not None, "BaseWrapper: self.opt is None"
+        
+        return self._run_epoch(
+            dataloaders=dataloaders,
+            mode=mode,
+            num_batches=num_batches,
+            
+            batch_fn=self.train_batch,
+            set_progress=True,
+            desc="train_epoch",
+        )
+        
+    def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
+        
+        return self._run_epoch(
+            dataloaders=dataloaders,
+            mode=mode,
+            num_batches=num_batches,
+            
+            batch_fn=self.eval_batch,
+            set_progress=False,
+            desc="eval_epoch",
+        )
+    
     def predict(self, dataloaders, mode='val'):
         _ = self.eval()
         
         all_output, all_target = [], []
+        
         loader = dataloaders[mode]
         if loader is None:
             return None
         else:
             gen = enumerate(loader)
             if self.verbose:
-                gen = tqdm(gen, total=len(loader), desc='eval_epoch:%s' % mode)
+                gen = tqdm(gen, total=len(loader), desc='predict:%s' % mode)
             
-            for batch_idx, (data, target) in gen:
-                if TORCH_VERSION_4:
-                    data = Variable(data, requires_grad=False)
-                else:
-                    data = Variable(data, volatile=True)
+            for _, (data, target) in gen:
+                data = _to_device(data, self.device)
                 
-                if self._cuda:
-                    data = data.cuda()
-                    
                 output = self(data)
-                all_output.append(output.data.cpu())
+                
+                all_output.append(output.cpu())
                 all_target.append(target)
         
         return torch.cat(all_output), torch.cat(all_target)
@@ -237,7 +215,7 @@ class BaseNet(nn.Module):
 
 class BaseWrapper(BaseNet):
     def __init__(self, net=None, **kwargs):
-        super(BaseWrapper, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.net = net
     
     def forward(self, x):

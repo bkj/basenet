@@ -1,12 +1,7 @@
 #!/usr/bin/env python
 
 """
-    cifar10.py
-    
-    Train preactivation ResNet18 on CIFAR10 w/ linear learning rate annealing
-    
-    After 50 epochs:
-        {"epoch": 49, "lr": 5.115089514063697e-06, "test_loss": 0.3168042216449976, "test_acc": 0.9355}
+    cifar10_distill.py
 """
 
 from __future__ import division, print_function
@@ -32,6 +27,27 @@ torch.backends.cudnn.benchmark = True
 from torchvision import transforms, datasets
 
 # --
+# Helpers
+
+class DistillationWrapper(object):
+    def __init__(self, dataset, z):
+        self.dataset = dataset
+        self.z = z
+        
+        assert len(z) == len(dataset)
+    
+    def __getitem__(self, index):
+        
+        x, y = self.dataset[index]
+        z = self.z[index]
+        
+        return x, (y, z)
+    
+    def __len__(self):
+        return len(self.dataset)
+
+
+# --
 # CLI
 
 def parse_args():
@@ -46,6 +62,9 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
+    
+    parser.add_argument('--distillation-alpha', type=float, default=0.75)
+    
     return parser.parse_args()
 
 args = parse_args()
@@ -75,6 +94,17 @@ try:
     testset  = datasets.CIFAR10(root='./data', train=False, download=args.download, transform=transform_test)
 except:
     raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
+
+
+train_preds = np.load('train_preds.npy')
+train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
+train_preds = train_preds.mean(axis=0)
+trainset = DistillationWrapper(trainset, train_preds)
+
+test_preds = np.load('test_preds.npy')
+test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
+test_preds = test_preds.mean(axis=0)
+testset = DistillationWrapper(testset, test_preds)
 
 trainloader = torch.utils.data.DataLoader(
     trainset,
@@ -125,8 +155,8 @@ class PreActBlock(nn.Module):
 
 
 class ResNet18(BaseNet):
-    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10):
-        super(ResNet18, self).__init__(loss_fn=F.cross_entropy)
+    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10, loss_fn=F.cross_entropy):
+        super(ResNet18, self).__init__(loss_fn=loss_fn)
         
         self.in_channels = 64
         
@@ -177,9 +207,27 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18().to(torch.device('cuda'))
-model.verbose = True
+def distillation_loss(alpha=0.5, T=1):
+    def _f(X, y):
+        log_X = F.log_softmax(X, dim=-1)
+        
+        hard_loss = F.nll_loss(log_X, y[0])
+        
+        # Hot cross entropy loss
+        y_soft_softmax = F.softmax(y[1] / T, dim=-1)
+        soft_loss = - (y_soft_softmax * log_X).sum(dim=-1).mean()
+        
+        return alpha * hard_loss + (1 - alpha) * soft_loss
+        
+    return _f
+
+
+loss_fn = distillation_loss(alpha=args.distillation_alpha)
+device = torch.device('cuda')
+model = ResNet18(loss_fn=loss_fn).to(device)
 print(model, file=sys.stderr)
+
+model.verbose = True
 
 # --
 # Initialize optimizer
@@ -211,3 +259,4 @@ for epoch in range(args.epochs + args.extra + args.burnout):
         "time"      : time() - t,
     }))
     sys.stdout.flush()
+
