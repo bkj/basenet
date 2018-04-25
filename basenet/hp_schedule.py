@@ -78,12 +78,12 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def linear_cycle(hp_init=0.1, epochs=10, low_hp=0.005, extra=5, **kwargs):
+    def linear_cycle(hp_max=0.1, epochs=10, low_hp=0.005, extra=5, **kwargs):
         def f(progress):
             if progress < epochs / 2:
-                return 2 * hp_init * (1 - float(epochs - progress) / epochs)
+                return 2 * hp_max * (1 - float(epochs - progress) / epochs)
             elif progress <= epochs:
-                return low_hp + 2 * hp_init * float(epochs - progress) / epochs
+                return low_hp + 2 * hp_max * float(epochs - progress) / epochs
             elif progress <= epochs + extra:
                 return low_hp * float(extra - (progress - epochs)) / extra
             else:
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     
     # Piecewise linear
     hp = HPSchedule.piecewise_linear(breaks=[0, 5, 10, 15], hps=[0, 1, 0.25, 0])
-    hps = np.vstack([hp(i) for i in np.linspace(-1, 16, 1000)])
+    hps = np.vstack([hp(i) for i in np.linspace(-1, 40, 1000)])
     _ = plt.plot(hps)
     show_plot()
     

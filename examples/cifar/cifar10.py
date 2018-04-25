@@ -19,7 +19,7 @@ from time import time
 from PIL import Image
 
 from basenet import BaseNet
-from basenet.lr import LRSchedule
+from basenet.hp_schedule import HPSchedule
 from basenet.helpers import to_numpy, set_seeds
 
 import torch
@@ -163,7 +163,7 @@ class ResNet18(BaseNet):
         return nn.Sequential(*layers)
     
     def forward(self, x):
-        x = self.prep(x.half())
+        x = self.prep(x)
         
         x = self.layers(x)
         
@@ -184,7 +184,7 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18().cuda().half()
+model = ResNet18().cuda()
 print(model, file=sys.stderr)
 
 # --
@@ -192,11 +192,11 @@ print(model, file=sys.stderr)
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(LRSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs, extra=args.extra)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs, extra=args.extra)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),
-    lr_scheduler=lr_scheduler,
+    hp_scheduler={"lr" : lr_scheduler},
     momentum=args.momentum,
     weight_decay=args.weight_decay,
     nesterov=True,
@@ -212,7 +212,7 @@ for epoch in range(args.epochs + args.extra + args.burnout):
     test  = model.eval_epoch(dataloaders, mode='test')
     print(json.dumps({
         "epoch"     : int(epoch),
-        "lr"        : model.lr,
+        "lr"        : model.hp['lr'],
         "test_acc"  : float(test['acc']),
         "time"      : time() - t,
     }))

@@ -33,13 +33,9 @@ import dlib
 # Helpers
 
 def dlib_find_max_global(f, bounds, **kwargs):
-    print('dlib_find_max_global', file=sys.stderr)
-    
     varnames = f.__code__.co_varnames[:f.__code__.co_argcount]
     bound1_, bound2_ = [], []
     for varname in varnames:
-        print(varname, bounds[varname][0], bounds[varname][1], file=sys.stderr)
-        
         bound1_.append(bounds[varname][0])
         bound2_.append(bounds[varname][1])
     
@@ -118,7 +114,7 @@ class ResNet18(BaseNet):
         return nn.Sequential(*layers)
     
     def forward(self, x):
-        x = self.prep(x.half())
+        x = self.prep(x)#.half())
         
         x = self.layers(x)
         
@@ -165,8 +161,8 @@ if __name__ == "__main__":
     ])
     
     try:
-        trainset = datasets.CIFAR10(root='../data', train=True, download=args.download, transform=transform_train)
-        testset  = datasets.CIFAR10(root='../data', train=False, download=args.download, transform=transform_test)
+        trainset = datasets.CIFAR10(root='./data', train=True, download=args.download, transform=transform_train)
+        testset  = datasets.CIFAR10(root='./data', train=False, download=args.download, transform=transform_test)
     except:
         raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
         
@@ -193,8 +189,8 @@ if __name__ == "__main__":
     
     def run_one(break1, break2, val1, val2):
         
-        try:
-            set_seeds(args.seed) # Might have bad side effects
+        # try:
+            # set_seeds(args.seed) # Might have bad side effects
             
             if (break1 >= break2):
                 return float(-1)
@@ -210,7 +206,7 @@ if __name__ == "__main__":
                 ("weight_decay", args.weight_decay),
             ])
             
-            model = ResNet18().cuda().half()
+            model = ResNet18().cuda()#.half()
             
             lr_scheduler = HPSchedule.piecewise_linear(
                 breaks=[0, break1, break2, args.epochs],
@@ -242,16 +238,17 @@ if __name__ == "__main__":
                 sys.stdout.flush()
             
             return float(test['acc'])
-        except:
-            return float(-1)
+        # except:
+            # return float(-1)
     
+    print('cifar_opt.py: start', file=sys.stderr)
     best_args, best_score = dlib_find_max_global(run_one, bounds={
-        "break1" : (0, 10),
-        "break2" : (0, 10),
+        "break1" : (0, args.epochs),
+        "break2" : (0, args.epochs),
         "val1"   : (-3, 0),
         "val2"   : (-3, 0),
     }, num_function_calls=100, solver_epsilon=0.001)
     
     print(best_args, file=sys.stderr)
     print(best_score, file=sys.stderr)
-
+    print('cifar_opt.py: done', file=sys.stderr)
