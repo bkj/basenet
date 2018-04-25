@@ -186,7 +186,7 @@ print(model, file=sys.stderr)
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs, extra=args.extra)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(lr_max=args.lr_max, epochs=args.epochs, extra=args.extra)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),

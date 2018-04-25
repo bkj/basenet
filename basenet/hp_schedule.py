@@ -61,7 +61,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def step(hp_init=0.1, breaks=(150, 250), factors=(0.1, 0.1), **kwargs):
+    def step(hp_init=0.1, breaks=(150, 250), factors=(0.1, 0.1)):
         """ Step function learning rate annealing """
         assert len(breaks) == len(factors)
         breaks = np.array(breaks)
@@ -71,15 +71,15 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def linear(hp_init=0.1, epochs=10, **kwargs):
+    def linear(hp_max=0.1, epochs=10):
         def f(progress):
             """ Linear learning rate annealing """
-            return hp_init * float(epochs - progress) / epochs
+            return hp_max * float(epochs - progress) / epochs
         
         return f
     
     @staticmethod
-    def linear_cycle(hp_max=0.1, epochs=10, low_hp=0.005, extra=5, **kwargs):
+    def linear_cycle(hp_max=0.1, epochs=10, low_hp=0.005, extra=5):
         def f(progress):
             if progress < epochs / 2:
                 return 2 * hp_max * (1 - float(epochs - progress) / epochs)
@@ -93,7 +93,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def piecewise_linear(breaks, vals, **kwargs):
+    def piecewise_linear(breaks, vals):
         assert len(breaks) == len(vals)
         
         def _f(progress):
@@ -115,7 +115,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def cyclical(hp_init=0.1, hp_burn_in=0.05, epochs=10, **kwargs):
+    def cyclical(hp_init=0.1, hp_burn_in=0.05, epochs=10):
         def f(progress):
             """ Cyclical learning rate w/ annealing """
             return hp_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
@@ -123,7 +123,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def sgdr(hp_init=0.1, period_length=50, hp_min=0, t_mult=1, **kwargs):
+    def sgdr(hp_init=0.1, period_length=50, hp_min=0, t_mult=1):
         def f(progress):
             """ SGDR learning rate annealing """
             if t_mult > 1:
@@ -139,7 +139,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def burnin_sgdr(hp_init=0.1, burnin_progress=0.15, burnin_factor=100, **kwargs):
+    def burnin_sgdr(hp_init=0.1, burnin_progress=0.15, burnin_factor=100):
         sgdr = HPSchedule.sgdr(hp_init=hp_init, **kwargs)
         
         def f(progress):
@@ -152,7 +152,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def exponential_increase(hp_init=0.1, hp_max=10, num_steps=100, **kwargs):
+    def exponential_increase(hp_init=0.1, hp_max=10, num_steps=100):
         mult = (hp_max / hp_init) ** (1 / num_steps)
         def f(progress):
             return hp_init * mult ** progress

@@ -52,18 +52,16 @@ class DistillationWrapper(object):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--extra', type=int, default=5)
-    parser.add_argument('--burnout', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
-    parser.add_argument('--lr-init', type=float, default=0.1)
-    parser.add_argument('--weight-decay', type=float, default=5e-4)
+    parser.add_argument('--lr-max', type=float, default=0.1)
+    parser.add_argument('--weight-decay', type=float, default=0.0)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
     
-    parser.add_argument('--distillation-alpha', type=float, default=0.75)
+    parser.add_argument('--distillation-alpha', type=float, default=0.5)
     
     return parser.parse_args()
 
@@ -95,16 +93,22 @@ try:
 except:
     raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
 
+# Distillation targets
+test_preds   = np.load('test_preds.npy')
+
+test_targets = np.load('test_targets.npy')
+test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
+top_models = np.argsort((test_preds.argmax(axis=-1) == test_targets).mean(axis=-1))[::-1]
+
+test_preds = test_preds[top_models[:30]].mean(axis=0)
+testset = DistillationWrapper(testset, test_preds)
 
 train_preds = np.load('train_preds.npy')
 train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
+train_preds = train_preds[top_models[:30]]
 train_preds = train_preds.mean(axis=0)
 trainset = DistillationWrapper(trainset, train_preds)
 
-test_preds = np.load('test_preds.npy')
-test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
-test_preds = test_preds.mean(axis=0)
-testset = DistillationWrapper(testset, test_preds)
 
 trainloader = torch.utils.data.DataLoader(
     trainset,
@@ -213,7 +217,6 @@ def distillation_loss(alpha=0.5, T=1):
         
         hard_loss = F.nll_loss(log_X, y[0])
         
-        # Hot cross entropy loss
         y_soft_softmax = F.softmax(y[1] / T, dim=-1)
         soft_loss = - (y_soft_softmax * log_X).sum(dim=-1).mean()
         
@@ -234,14 +237,14 @@ model.verbose = True
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(lr_init=args.lr_init, epochs=args.epochs, extra=args.extra)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),
     hp_scheduler={"lr" : lr_scheduler},
     momentum=args.momentum,
     weight_decay=args.weight_decay,
-    nesterov=True,
+    # nesterov=True,
 )
 
 # --
@@ -249,12 +252,13 @@ model.init_optimizer(
 
 print('cifar10.py: training...', file=sys.stderr)
 t = time()
-for epoch in range(args.epochs + args.extra + args.burnout):
+for epoch in range(args.epochs):
     train = model.train_epoch(dataloaders, mode='train')
     test  = model.eval_epoch(dataloaders, mode='test')
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
+        "alpha"     : float(args.distillation_alpha),
         "test_acc"  : float(test['acc']),
         "time"      : time() - t,
     }))

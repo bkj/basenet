@@ -141,7 +141,9 @@ class BaseNet(nn.Module):
                 output, loss = batch_fn(data, target)
                 loss_hist[batch_idx] = loss
                 
+                # >>
                 correct += (to_numpy(output).argmax(axis=1) == to_numpy(target[0])).sum()
+                # <<
                 total   += data.shape[0]
                 
                 if batch_idx > num_batches:
