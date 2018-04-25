@@ -18,6 +18,7 @@ from collections import OrderedDict
 from basenet import BaseNet
 from basenet.hp_schedule import HPSchedule
 from basenet.helpers import to_numpy, set_seeds
+from basenet.vision import transforms as btransforms
 
 import torch
 from torch import nn
@@ -139,25 +140,19 @@ if __name__ == "__main__":
     # --
     # IO
     
-    cifar10_stats = {
-        "mean" : (0.4914, 0.4822, 0.4465),
-        "std"  : (0.24705882352941178, 0.24352941176470588, 0.2615686274509804),
-    }
+    print('cifar_opt.py: making dataloaders...', file=sys.stderr)
     
     transform_train = transforms.Compose([
-        transforms.Lambda(lambda x: np.asarray(x)),
-        transforms.Lambda(lambda x: np.pad(x, [(4, 4), (4, 4), (0, 0)], mode='reflect')),
-        transforms.Lambda(lambda x: Image.fromarray(x)),
+        btransforms.ReflectionPadding(margin=(4, 4)),
         transforms.RandomCrop(32),
-        
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(cifar10_stats['mean'], cifar10_stats['std']),
+        btransforms.NormalizeDataset(dataset='cifar10'),
     ])
     
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(cifar10_stats['mean'], cifar10_stats['std']),
+        btransforms.NormalizeDataset(dataset='cifar10'),
     ])
     
     try:

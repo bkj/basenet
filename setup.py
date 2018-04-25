@@ -1,6 +1,6 @@
 #!/usr/bin/env/python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='basenet',
@@ -10,6 +10,6 @@ setup(
     description='pytorch training tools',
     keywords=['basenet'],
     license='ALV2',
-    packages=['basenet'],
+    packages=find_packages(),
     version="0.0.0"
 )
