@@ -33,6 +33,8 @@ def linterp(x, start_x, end_x, start_y, end_y):
     return start_y + (x - start_x) / (end_x - start_x) * (end_y - start_y)
 
 def _set_hp(optimizer, hp_name, hp_hp):
+    num_param_groups = len(list(optimizer.param_groups))
+    
     if isinstance(hp_hp, float):
         hp_hp = [hp_hp] * num_param_groups
     else:
@@ -47,8 +49,6 @@ class HPSchedule(object):
     
     @staticmethod
     def set_hp(optimizer, hp):
-        num_param_groups = len(list(optimizer.param_groups))
-        
         for hp_name, hp_hp in hp.items():
             _set_hp(optimizer, hp_name, hp_hp)
     
@@ -92,18 +92,18 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def piecewise_linear(breaks, hps, **kwargs):
-        assert len(breaks) == len(hps)
+    def piecewise_linear(breaks, vals, **kwargs):
+        assert len(breaks) == len(vals)
         
         def _f(progress):
             if progress < breaks[0]:
-                return hps[0]
+                return vals[0]
             
             for i in range(1, len(breaks)):
                 if progress < breaks[i]:
-                    return linterp(progress, breaks[i - 1], breaks[i], hps[i - 1], hps[i])
+                    return linterp(progress, breaks[i - 1], breaks[i], vals[i - 1], vals[i])
             
-            return hps[-1]
+            return vals[-1]
         
         def f(x):
             if isinstance(x, list) or isinstance(x, np.ndarray):

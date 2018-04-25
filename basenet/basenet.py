@@ -67,7 +67,7 @@ class BaseNet(nn.Module):
         self.hp_scheduler = hp_scheduler
         
         if hp_scheduler is not None:
-            if hp_name, scheduler in hp_scheduler.items():
+            for hp_name, scheduler in hp_scheduler.items():
                 kwargs[hp_name] = scheduler(0)
         
         self.opt = opt(params, **kwargs)

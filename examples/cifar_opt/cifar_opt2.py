@@ -16,7 +16,7 @@ from datetime import datetime
 from collections import OrderedDict
 
 from basenet import BaseNet
-from basenet.hp import HPSchedule
+from basenet.hp_schedule import HPSchedule
 from basenet.helpers import to_numpy, set_seeds
 
 import torch
@@ -33,12 +33,9 @@ import dlib
 # Helpers
 
 def dlib_find_max_global(f, bounds, **kwargs):
-    print('dlib_find_max_global', file=sys.stderr)
-    
     varnames = f.__code__.co_varnames[:f.__code__.co_argcount]
     bound1_, bound2_ = [], []
     for varname in varnames:
-        print(varname, bounds[varname][0], bounds[varname][1], file=sys.stderr)
         
         bound1_.append(bounds[varname][0])
         bound2_.append(bounds[varname][1])
@@ -190,67 +187,71 @@ if __name__ == "__main__":
         "test"  : testloader,
     }
     
-    def run_one(
-        lr_break1, lr_break2, lr1, lr2, 
-        mo_break, mo0, mo1, mo2
-    ):
+    def run_one(lr_break1, lr_break2, lr1, lr2, mo_break, mo0, mo1, mo2):
         
-        set_seeds(args.seed) # Might have bad side effects
+        try:
         
-        if (lr_break1 > lr_break2):
-            return float(-1)
-        
-        timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-        params = OrderedDict([
-            ("timestamp",    timestamp),
-            ("lr_break1",    lr_break1),
-            ("lr_break2",    lr_break2),
-            ("lr1",          10 ** lr1),
-            ("lr2",          10 ** lr2),
-            ("mo0",          1 - 10 ** mo0),
-            ("mo1",          1 - 10 ** mo1),
-            ("mo2",          1 - 10 ** mo2),
-            ("weight_decay", args.weight_decay),
-        ])
-        
-        model = ResNet18().cuda().half()
-        
-        lr_scheduler = HPSchedule.piecewise_linear(
-            breaks=[0, lr_break1, lr_break2, args.epochs],
-            vals=[0, 10 ** lr1, 10 ** lr2, 0]
-        )
-        mo_scheduler = HPSchedule.piecewise_linear(
-            breaks=[0, mo_break, args.epochs],
-            vals=[1 - 10 ** mo0, 1 - 10 ** mo1, 1 - 10 ** mo2]
-        )
-        
-        model.init_optimizer(
-            opt=torch.optim.SGD,
-            params=model.parameters(),
-            hp_scheduler={
-                "lr" : lr_scheduler,
-                "mo" : mo_scheduler
-            },
-            weight_decay=args.weight_decay,
-            nesterov=True,
-        )
-        
-        t = time()
-        for epoch in range(args.epochs):
-            train = model.train_epoch(dataloaders, mode='train')
-            test  = model.eval_epoch(dataloaders, mode='test')
+            # --
+            # Validate
             
-            print(json.dumps(OrderedDict([
-                ("params",   params),
-                ("epoch",    int(epoch)),
-                ("lr",       model.hp['lr']),
-                ("mo",       model.hp['mo']),
-                ("test_acc", float(test['acc'])),
-                ("time",     time() - t),
-            ])))
-            sys.stdout.flush()
-        
-        return float(test['acc'])
+            if (lr_break1 > lr_break2):
+                return float(-1)
+            
+            # set_seeds(args.seed) # Might have bad side effects
+            
+            timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+            params = OrderedDict([
+                ("timestamp",    timestamp),
+                ("lr_break1",    lr_break1),
+                ("lr_break2",    lr_break2),
+                ("lr1",          10 ** lr1),
+                ("lr2",          10 ** lr2),
+                ("mo0",          1 - 10 ** mo0),
+                ("mo1",          1 - 10 ** mo1),
+                ("mo2",          1 - 10 ** mo2),
+                ("weight_decay", args.weight_decay),
+            ])
+            
+            model = ResNet18().cuda().half()
+            
+            lr_scheduler = HPSchedule.piecewise_linear(
+                breaks=[0, lr_break1, lr_break2, args.epochs],
+                vals=[0, 10 ** lr1, 10 ** lr2, 0]
+            )
+            mo_scheduler = HPSchedule.piecewise_linear(
+                breaks=[0, mo_break, args.epochs],
+                vals=[1 - 10 ** mo0, 1 - 10 ** mo1, 1 - 10 ** mo2]
+            )
+            
+            model.init_optimizer(
+                opt=torch.optim.SGD,
+                params=model.parameters(),
+                hp_scheduler={
+                    "lr"       : lr_scheduler,
+                    "momentum" : mo_scheduler,
+                },
+                weight_decay=args.weight_decay,
+                nesterov=True,
+            )
+            
+            t = time()
+            for epoch in range(args.epochs):
+                train = model.train_epoch(dataloaders, mode='train')
+                test  = model.eval_epoch(dataloaders, mode='test')
+                
+                print(json.dumps(OrderedDict([
+                    ("params",   params),
+                    ("epoch",    int(epoch)),
+                    ("lr",       model.hp['lr']),
+                    ("mo",       model.hp['momentum']),
+                    ("test_acc", float(test['acc'])),
+                    ("time",     time() - t),
+                ])))
+                sys.stdout.flush()
+            
+            return float(test['acc'])
+        except:
+            return float(-1)
     
     best_args, best_score = dlib_find_max_global(run_one, bounds={
         "lr_break1" : (0, 10),

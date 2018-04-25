@@ -16,7 +16,7 @@ from datetime import datetime
 from collections import OrderedDict
 
 from basenet import BaseNet
-from basenet.hp import HPSchedule
+from basenet.hp_schedule import HPSchedule
 from basenet.helpers import to_numpy, set_seeds
 
 import torch
@@ -52,10 +52,6 @@ def dlib_find_max_global(f, bounds, **kwargs):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--extra', type=int, default=5)
-    parser.add_argument('--burnout', type=int, default=5)
-    parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
-    parser.add_argument('--lr-init', type=float, default=0.1)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
@@ -197,58 +193,61 @@ if __name__ == "__main__":
     
     def run_one(break1, break2, val1, val2):
         
-        set_seeds(args.seed) # Might have bad side effects
-        
-        if (break1 >= break2):
-            return float(-1)
-        
-        timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-        params = OrderedDict([
-            ("timestamp",    timestamp),
-            ("break1",       break1),
-            ("break2",       break2),
-            ("val1",         10 ** val1),
-            ("val2",         10 ** val2),
-            ("momentum",     args.momentum),
-            ("weight_decay", args.weight_decay),
-        ])
-        
-        model = ResNet18().cuda().half()
-        
-        lr_scheduler = HPSchedule.piecewise_linear(
-            breaks=[0, break1, break2, args.epochs],
-            vals=[0, 10 ** val1, 10 ** val2, 0]
-        )
-        
-        model.init_optimizer(
-            opt=torch.optim.SGD,
-            params=model.parameters(),
-            hp_scheduler={"lr" : lr_scheduler},
-            momentum=args.momentum,
-            weight_decay=args.weight_decay,
-            nesterov=True,
-        )
-        
-        t = time()
-        for epoch in range(args.epochs):
-            train = model.train_epoch(dataloaders, mode='train')
-            test  = model.eval_epoch(dataloaders, mode='test')
+        try:
+            set_seeds(args.seed) # Might have bad side effects
             
-            res = OrderedDict([
-                ("params",   params),
-                ("epoch",    int(epoch)),
-                ("lr",       model.hp['lr']),
-                ("test_acc", float(test['acc'])),
-                ("time",     time() - t),
+            if (break1 >= break2):
+                return float(-1)
+            
+            timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+            params = OrderedDict([
+                ("timestamp",    timestamp),
+                ("break1",       break1),
+                ("break2",       break2),
+                ("val1",         10 ** val1),
+                ("val2",         10 ** val2),
+                ("momentum",     args.momentum),
+                ("weight_decay", args.weight_decay),
             ])
-            print(json.dumps(res))
-            sys.stdout.flush()
-        
-        return float(test['acc'])
+            
+            model = ResNet18().cuda().half()
+            
+            lr_scheduler = HPSchedule.piecewise_linear(
+                breaks=[0, break1, break2, args.epochs],
+                vals=[0, 10 ** val1, 10 ** val2, 0]
+            )
+            
+            model.init_optimizer(
+                opt=torch.optim.SGD,
+                params=model.parameters(),
+                hp_scheduler={"lr" : lr_scheduler},
+                momentum=args.momentum,
+                weight_decay=args.weight_decay,
+                nesterov=True,
+            )
+            
+            t = time()
+            for epoch in range(args.epochs):
+                train = model.train_epoch(dataloaders, mode='train')
+                test  = model.eval_epoch(dataloaders, mode='test')
+                
+                res = OrderedDict([
+                    ("params",   params),
+                    ("epoch",    int(epoch)),
+                    ("lr",       model.hp['lr']),
+                    ("test_acc", float(test['acc'])),
+                    ("time",     time() - t),
+                ])
+                print(json.dumps(res))
+                sys.stdout.flush()
+            
+            return float(test['acc'])
+        except:
+            return float(-1)
     
     best_args, best_score = dlib_find_max_global(run_one, bounds={
-        "break1" : (1, 9),
-        "break2" : (1, 9),
+        "break1" : (0, 10),
+        "break2" : (0, 10),
         "val1"   : (-3, 0),
         "val2"   : (-3, 0),
     }, num_function_calls=100, solver_epsilon=0.001)
