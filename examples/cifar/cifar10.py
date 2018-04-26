@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--extra', type=int, default=5)
     parser.add_argument('--burnout', type=int, default=5)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
-    parser.add_argument('--lr-init', type=float, default=0.1)
+    parser.add_argument('--lr-max', type=float, default=0.1)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
@@ -181,12 +181,16 @@ model = ResNet18().to(torch.device('cuda'))
 model.verbose = True
 print(model, file=sys.stderr)
 
+# num_params = [np.prod(p.size()) for p in filter(lambda p: p.requires_grad, model.parameters())]
+# for num_param in num_params:
+#     print(num_param, file=sys.stderr)
+
 # --
 # Initialize optimizer
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(lr_max=args.lr_max, epochs=args.epochs, extra=args.extra)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)#, extra=args.extra)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),

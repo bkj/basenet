@@ -55,12 +55,12 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
-    parser.add_argument('--weight-decay', type=float, default=0.0)
-    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
     
+    parser.add_argument('--weight-decay', type=float, default=0.0)
+    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--distillation-alpha', type=float, default=0.5)
     
     return parser.parse_args()
@@ -105,8 +105,7 @@ testset = DistillationWrapper(testset, test_preds)
 
 train_preds = np.load('train_preds.npy')
 train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
-train_preds = train_preds[top_models[:30]]
-train_preds = train_preds.mean(axis=0)
+train_preds = train_preds[top_models[:30]].mean(axis=0)
 trainset = DistillationWrapper(trainset, train_preds)
 
 
@@ -211,7 +210,7 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-def distillation_loss(alpha=0.5, T=1):
+def distillation_loss(alpha, T=1):
     def _f(X, y):
         log_X = F.log_softmax(X, dim=-1)
         
@@ -258,9 +257,12 @@ for epoch in range(args.epochs):
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
-        "alpha"     : float(args.distillation_alpha),
         "test_acc"  : float(test['acc']),
         "time"      : time() - t,
+        
+        "weight_decay" : float(args.weight_decay),
+        "momentum"     : float(args.momentum),
+        "alpha"        : float(args.distillation_alpha),
     }))
     sys.stdout.flush()
 

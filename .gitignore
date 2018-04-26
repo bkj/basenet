@@ -1,3 +1,6 @@
+*npy
+examples/*/data/
+examples/*/results/
 examples/data/*
 *jl
 

@@ -25,12 +25,9 @@ for p in sys.argv[1:]:
 
 _ = plt.legend(loc='lower right')
 _ = plt.grid(alpha=0.25)
-_ = plt.axhline(0.90, c='grey', alpha=0.25, lw=1)
-_ = plt.axhline(0.92, c='grey', alpha=0.25, lw=1)
-_ = plt.axhline(0.94, c='grey', alpha=0.25, lw=1)
-_ = plt.axhline(0.96, c='grey', alpha=0.25, lw=1)
-_ = plt.axhline(0.98, c='grey', alpha=0.25, lw=1)
-# _ = plt.axhline(0.94, c='grey', alpha=0.5)
-# _ = plt.ylim(0.9, 1.0)
+for t in np.arange(0.90, 1.0, 0.01):
+    _ = plt.axhline(t, c='grey', alpha=0.25, lw=1)
+
+_ = plt.ylim(0.75, 1.0)
 # _ = plt.xlim(0, 40)
 show_plot()

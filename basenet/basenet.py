@@ -142,7 +142,10 @@ class BaseNet(nn.Module):
                 loss_hist[batch_idx] = loss
                 
                 # >>
-                correct += (to_numpy(output).argmax(axis=1) == to_numpy(target[0])).sum()
+                if isinstance(target, list):
+                    correct += (to_numpy(output).argmax(axis=1) == to_numpy(target[0])).sum()
+                else:
+                    correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
                 # <<
                 total   += data.shape[0]
                 
