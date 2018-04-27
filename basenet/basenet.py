@@ -202,12 +202,10 @@ class BaseNet(nn.Module):
                 gen = tqdm(gen, total=len(loader), desc='predict:%s' % mode)
             
             for _, (data, target) in gen:
-                data = _to_device(data, self.device)
-                
-                output = self(data)
-                
-                all_output.append(output.cpu())
-                all_target.append(target)
+                with torch.no_grad():
+                    data = _to_device(data, self.device)
+                    all_output.append(self(data).cpu())
+                    all_target.append(target)
         
         return torch.cat(all_output), torch.cat(all_target)
     

@@ -26,7 +26,6 @@ from basenet.vision import transforms as btransforms
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.autograd import Variable
 torch.backends.cudnn.benchmark = True
 
 from torchvision import transforms, datasets
@@ -215,3 +214,5 @@ for epoch in range(args.epochs + args.extra + args.burnout):
         "time"      : time() - t,
     }))
     sys.stdout.flush()
+
+model.save('weights')

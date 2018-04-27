@@ -52,7 +52,7 @@ class DistillationWrapper(object):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
     parser.add_argument('--batch-size', type=int, default=128)
@@ -210,7 +210,7 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-def distillation_loss(alpha, T=1):
+def distillation_loss(alpha, T=4):
     def _f(X, y):
         log_X = F.log_softmax(X, dim=-1)
         
