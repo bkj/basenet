@@ -219,6 +219,7 @@ for epoch in range(args.epochs + args.extra + args.burnout):
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
         "test_acc"  : float(test['acc']),
+        "train_acc" : float(train['acc']),
         "time"      : time() - t,
     }))
     sys.stdout.flush()
