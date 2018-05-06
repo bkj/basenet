@@ -1,12 +1,7 @@
 #!/usr/bin/env python
 
 """
-    cifar10.py
-    
-    Train preactivation ResNet18 on CIFAR10 w/ linear learning rate annealing
-    
-    After 50 epochs:
-        {"epoch": 49, "lr": 5.115089514063697e-06, "test_loss": 0.3168042216449976, "test_acc": 0.9355}
+    cifar10_distill.py
 """
 
 from __future__ import division, print_function
@@ -26,25 +21,48 @@ from basenet.vision import transforms as btransforms
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.autograd import Variable
 torch.backends.cudnn.benchmark = True
 
 from torchvision import transforms, datasets
+
+# --
+# Helpers
+
+class DistillationWrapper(object):
+    def __init__(self, dataset, z):
+        self.dataset = dataset
+        self.z = z
+        
+        assert len(z) == len(dataset)
+    
+    def __getitem__(self, index):
+        
+        x, y = self.dataset[index]
+        z = self.z[index]
+        
+        return x, (y, z)
+    
+    def __len__(self):
+        return len(self.dataset)
+
 
 # --
 # CLI
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--extra', type=int, default=5)
-    parser.add_argument('--burnout', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
-    parser.add_argument('--weight-decay', type=float, default=5e-4)
-    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
+    
+    parser.add_argument('--weight-decay', type=float, default=0.0)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--distillation-alpha', type=float, default=0.5)
+    
     return parser.parse_args()
 
 args = parse_args()
@@ -74,6 +92,22 @@ try:
     testset  = datasets.CIFAR10(root='./data', train=False, download=args.download, transform=transform_test)
 except:
     raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
+
+# Distillation targets
+# test_preds   = np.load('test_preds_40.npy')
+
+# test_targets = np.load('test_targets.npy')
+# test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
+# top_models = np.argsort((test_preds.argmax(axis=-1) == test_targets).mean(axis=-1))[::-1]
+
+# test_preds = test_preds[top_models[:30]].mean(axis=0)
+# testset = DistillationWrapper(testset, test_preds)
+
+train_preds = np.load('train_preds_40.npy')
+# train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
+# train_preds = train_preds[top_models[:30]].mean(axis=0)
+trainset = DistillationWrapper(trainset, train_preds)
+
 
 trainloader = torch.utils.data.DataLoader(
     trainset,
@@ -124,8 +158,8 @@ class PreActBlock(nn.Module):
 
 
 class ResNet18(BaseNet):
-    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10):
-        super(ResNet18, self).__init__(loss_fn=F.cross_entropy)
+    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10, loss_fn=F.cross_entropy):
+        super(ResNet18, self).__init__(loss_fn=loss_fn)
         
         self.in_channels = 64
         
@@ -176,27 +210,40 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18().to(torch.device('cuda'))
-model.verbose = True
+def distillation_loss(alpha, T=4):
+    def _f(X, y):
+        log_X = F.log_softmax(X, dim=-1)
+        
+        hard_loss = F.nll_loss(log_X, y[0])
+        
+        y_soft_softmax = F.softmax(y[1] / T, dim=-1)
+        soft_loss = - (y_soft_softmax * log_X).sum(dim=-1).mean()
+        
+        return alpha * hard_loss + (1 - alpha) * soft_loss
+        
+    return _f
+
+
+loss_fn = distillation_loss(alpha=args.distillation_alpha)
+device = torch.device('cuda')
+model = ResNet18(loss_fn=loss_fn).to(device)
 print(model, file=sys.stderr)
 
-# num_params = [np.prod(p.size()) for p in filter(lambda p: p.requires_grad, model.parameters())]
-# for num_param in num_params:
-#     print(num_param, file=sys.stderr)
+model.verbose = True
 
 # --
 # Initialize optimizer
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)#, extra=args.extra)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),
     hp_scheduler={"lr" : lr_scheduler},
     momentum=args.momentum,
     weight_decay=args.weight_decay,
-    nesterov=True,
+    # nesterov=True,
 )
 
 # --
@@ -204,7 +251,7 @@ model.init_optimizer(
 
 print('cifar10.py: training...', file=sys.stderr)
 t = time()
-for epoch in range(args.epochs + args.extra + args.burnout):
+for epoch in range(args.epochs):
     train = model.train_epoch(dataloaders, mode='train')
     test  = model.eval_epoch(dataloaders, mode='test')
     print(json.dumps({
@@ -212,7 +259,10 @@ for epoch in range(args.epochs + args.extra + args.burnout):
         "lr"        : model.hp['lr'],
         "test_acc"  : float(test['acc']),
         "time"      : time() - t,
+        
+        "weight_decay" : float(args.weight_decay),
+        "momentum"     : float(args.momentum),
+        "alpha"        : float(args.distillation_alpha),
     }))
     sys.stdout.flush()
 
-model.save('weights')

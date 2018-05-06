@@ -78,7 +78,7 @@ except:
 trainloader = torch.utils.data.DataLoader(
     trainset,
     batch_size=args.batch_size,
-    shuffle=True,
+    shuffle=False,
     num_workers=16,
     pin_memory=True,
 )
@@ -180,39 +180,26 @@ model = ResNet18().to(torch.device('cuda'))
 model.verbose = True
 print(model, file=sys.stderr)
 
-# num_params = [np.prod(p.size()) for p in filter(lambda p: p.requires_grad, model.parameters())]
-# for num_param in num_params:
-#     print(num_param, file=sys.stderr)
+model.load('weights')
 
-# --
-# Initialize optimizer
+train_preds, train_targets = model.predict(dataloaders, mode='train')
+test_preds, test_targets = model.predict(dataloaders, mode='test')
 
-print('cifar10.py: initializing optimizer...', file=sys.stderr)
+np.save('../cifar_distill/train_preds_40', to_numpy(train_preds))
+np.save('../cifar_distill/train_targets_40', to_numpy(train_targets))
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)#, extra=args.extra)
-model.init_optimizer(
-    opt=torch.optim.SGD,
-    params=model.parameters(),
-    hp_scheduler={"lr" : lr_scheduler},
-    momentum=args.momentum,
-    weight_decay=args.weight_decay,
-    nesterov=True,
-)
+np.save('../cifar_distill/test_preds_40', to_numpy(test_preds))
+np.save('../cifar_distill/test_targets_40', to_numpy(test_targets))
 
-# --
-# Train
 
-print('cifar10.py: training...', file=sys.stderr)
-t = time()
-for epoch in range(args.epochs + args.extra + args.burnout):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
-    print(json.dumps({
-        "epoch"     : int(epoch),
-        "lr"        : model.hp['lr'],
-        "test_acc"  : float(test['acc']),
-        "time"      : time() - t,
-    }))
-    sys.stdout.flush()
 
-model.save('weights')
+
+
+
+
+
+
+
+
+
+

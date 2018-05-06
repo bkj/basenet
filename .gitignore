@@ -1,4 +1,9 @@
+*npy
+examples/*/data/
+examples/*/results/
 examples/data/*
+*jl
+
 examples/results/*
 basenet.egg-info/*
 build/*

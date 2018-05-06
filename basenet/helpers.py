@@ -28,7 +28,9 @@ def set_seeds(seed=100):
 
 if TORCH_VERSION_4:
     def to_numpy(x):
-        if type(x) in [np.ndarray, float, int]:
+        if type(x) in [list, tuple]:
+            return [to_numpy(xx) for xx in x]
+        elif type(x) in [np.ndarray, float, int]:
             return x
         elif x.requires_grad:
             return to_numpy(x.detach())
