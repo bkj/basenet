@@ -11,4 +11,4 @@ python cifar10.py \
     --lr-schedule sgdr \
     --lr-max 0.1 \
     --download \
-    --seed 123 > results/cifar10-sgdr-150-2.jl
+    --seed 123 > results/cifar10-sgdr-150-dp.jl

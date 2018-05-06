@@ -8,15 +8,12 @@ import numpy as np
 from rsub import *
 import matplotlib as mpl
 from matplotlib import pyplot as plt
-from matplotlib import pylab as pl
 
 def smart_json_loads(x):
     try:
         return json.loads(x)
     except:
         pass
-
-colors = pl.cm.jet(np.linspace(0,1,101))
 
 all_data = []
 for p in sys.argv[1:]:
@@ -25,9 +22,13 @@ for p in sys.argv[1:]:
     acc   = [d['test_acc'] for d in data]
     epoch = [d['epoch'] for d in data]
     _ = plt.plot(epoch, acc, alpha=0.75, label=p)
+    
+    if 'train_acc' in data[0]:
+        acc   = [d['train_acc'] for d in data]
+        epoch = [d['epoch'] for d in data]
+        _ = plt.plot(epoch, acc, alpha=0.75, label=p)
 
-
-# _ = plt.legend(loc='lower right')
+_ = plt.legend(loc='lower right')
 _ = plt.grid(alpha=0.25)
 for t in np.arange(0.90, 1.0, 0.01):
     _ = plt.axhline(t, c='grey', alpha=0.25, lw=1)
