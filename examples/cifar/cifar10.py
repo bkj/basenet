@@ -102,8 +102,13 @@ dataloaders = {
 
 class PreActBlock(nn.Module):
     
-    def __init__(self, in_channels, out_channels, stride=1):
+    def __init__(self, in_channels, out_channels, drop_path_keep_prob=None, stride=1):
         super(PreActBlock, self).__init__()
+        
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.stride = stride
+        self.drop_path_keep_prob = drop_path_keep_prob
         
         self.bn1   = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
@@ -114,13 +119,26 @@ class PreActBlock(nn.Module):
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False)
             )
-            
+    
     def forward(self, x):
         out = F.relu(self.bn1(x))
         shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
         out = self.conv1(out)
         out = self.conv2(F.relu(self.bn2(out)))
+        
+        # >>
+        if self.drop_path_keep_prob is not None:
+            drop_path_keep_prob = 1 - self.progress * (1 - self.drop_path_keep_prob)
+            mask = torch.rand(out.shape[0]) < drop_path_keep_prob
+            out[mask] = out[mask].zero_()
+            out *= drop_path_keep_prob
+        # <<
+        
         return out + shortcut
+    
+    def __repr__(self):
+        return 'PreActBlock(%d -> %d | stride=%d | drop_path_keep_prob=%f)' % \
+            (self.in_channels, self.out_channels, self.stride, self.drop_path_keep_prob)
 
 
 class ResNet18(BaseNet):
@@ -135,6 +153,9 @@ class ResNet18(BaseNet):
             nn.ReLU()
         )
         
+        self.layer_id = 0
+        self.num_layers = 8
+        self.max_drop_path = 0.6
         self.layers = nn.Sequential(
             self._make_layer(64, 64, num_blocks[0], stride=1),
             self._make_layer(64, 128, num_blocks[1], stride=2),
@@ -149,10 +170,22 @@ class ResNet18(BaseNet):
         strides = [stride] + [1] * (num_blocks-1)
         layers = []
         for stride in strides:
-            layers.append(PreActBlock(in_channels=in_channels, out_channels=out_channels, stride=stride))
+            layers.append(PreActBlock(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                drop_path_keep_prob=self.max_drop_path * ((self.layer_id + 1) / self.num_layers),
+                stride=stride
+            ))
             in_channels = out_channels
+            self.layer_id += 1
         
         return nn.Sequential(*layers)
+    
+    def set_progress(self, progress):
+        super().set_progress(progress)
+        for child in self.layers.children:
+            for grandchild in child.children:
+                grandchild.progress = progress
     
     def forward(self, x):
         x = self.prep(x)
