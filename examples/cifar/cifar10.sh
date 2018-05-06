@@ -5,8 +5,8 @@
 mkdir -p results
 
 python cifar10.py \
-    --epochs 50 \
-    --lr-schedule linear \
-    --lr-init 0.1 \
+    --epochs 150 \
+    --lr-schedule sgdr \
+    --lr-max 0.1 \
     --download \
-    --seed 123 > results/cifar10-linear.jl
+    --seed 123 > results/cifar10-sgdr-150.jl
