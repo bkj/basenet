@@ -22,7 +22,7 @@ all_data = []
 for p in sys.argv[1:]:
     data = list(filter(None, map(smart_json_loads, open(p))))
     
-    c = float(os.path.basename(p).split('-')[-1])
+    c = float(os.path.basename(p).split('-')[-2])
     
     acc   = [d['test_acc'] for d in data]
     # epoch = [d['epoch'] for d in data]

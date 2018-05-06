@@ -94,18 +94,18 @@ except:
     raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
 
 # Distillation targets
-test_preds   = np.load('test_preds.npy')
+# test_preds   = np.load('test_preds_40.npy')
 
-test_targets = np.load('test_targets.npy')
-test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
-top_models = np.argsort((test_preds.argmax(axis=-1) == test_targets).mean(axis=-1))[::-1]
+# test_targets = np.load('test_targets.npy')
+# test_preds = test_preds[~np.isnan(test_preds).any(axis=(1, 2))]
+# top_models = np.argsort((test_preds.argmax(axis=-1) == test_targets).mean(axis=-1))[::-1]
 
-test_preds = test_preds[top_models[:30]].mean(axis=0)
-testset = DistillationWrapper(testset, test_preds)
+# test_preds = test_preds[top_models[:30]].mean(axis=0)
+# testset = DistillationWrapper(testset, test_preds)
 
-train_preds = np.load('train_preds.npy')
-train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
-train_preds = train_preds[top_models[:30]].mean(axis=0)
+train_preds = np.load('train_preds_40.npy')
+# train_preds = train_preds[~np.isnan(train_preds).any(axis=(1, 2))]
+# train_preds = train_preds[top_models[:30]].mean(axis=0)
 trainset = DistillationWrapper(trainset, train_preds)
 
 
