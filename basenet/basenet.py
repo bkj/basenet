@@ -8,6 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 from tqdm import tqdm
+import warnings
 
 import torch
 from torch import nn
@@ -63,6 +64,8 @@ class BaseNet(nn.Module):
     # Optimization
     
     def init_optimizer(self, opt, params, hp_scheduler=None, clip_grad_norm=0, **kwargs):
+        params = list(params)
+        
         self.clip_grad_norm = clip_grad_norm
         self.hp_scheduler = hp_scheduler
         
@@ -70,7 +73,13 @@ class BaseNet(nn.Module):
             for hp_name, scheduler in hp_scheduler.items():
                 kwargs[hp_name] = scheduler(0)
         
-        self.opt = opt(params, **kwargs)
+        if not np.all([p.requires_grad for p in params]):
+            warnings.warn((
+                'BaseNet.init_optimizer: some variables do not require gradients. '
+                'Ignoring them, but better to handle explicitly'
+            ), RuntimeWarning)
+        
+        self.opt = opt([p for p in params if p.requires_grad], **kwargs)
         self.set_progress(0)
     
     def set_progress(self, progress):
