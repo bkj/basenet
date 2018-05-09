@@ -180,10 +180,6 @@ model = ResNet18().to(torch.device('cuda'))
 model.verbose = True
 print(model, file=sys.stderr)
 
-# num_params = [np.prod(p.size()) for p in filter(lambda p: p.requires_grad, model.parameters())]
-# for num_param in num_params:
-#     print(num_param, file=sys.stderr)
-
 # --
 # Initialize optimizer
 
