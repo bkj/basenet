@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
     
+    parser.add_argument('--drop-path-prob', type=float, default=0.0)
     parser.add_argument('--sgdr-period-length', type=int, default=10)
     parser.add_argument('--sgdr-t-mult', type=int, default=2)
     
@@ -132,7 +133,7 @@ class PreActBlock(nn.Module):
         
         # >>
         if self.training:
-            if self.drop_path_prob is not None:
+            if self.drop_path_prob > 0:
                 drop_path_prob = self.progress * self.drop_path_prob
                 mask = torch.rand(out.shape[0]) <= drop_path_prob
                 out[mask] = out[mask].zero_()
@@ -149,7 +150,7 @@ class PreActBlock(nn.Module):
 
 
 class ResNet18(BaseNet):
-    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10, epochs=None):
+    def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10, epochs=None, drop_path_prob=0.0):
         super().__init__(loss_fn=F.cross_entropy)
         
         assert epochs is not None
@@ -165,7 +166,7 @@ class ResNet18(BaseNet):
         
         self.layer_id = 0
         self.num_layers = 8
-        self.drop_path_prob = 0.6
+        self.drop_path_prob = drop_path_prob
         self.layers = nn.Sequential(
             self._make_layer(64, 64, num_blocks[0], stride=1),
             self._make_layer(64, 128, num_blocks[1], stride=2),
@@ -220,7 +221,7 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18(epochs=args.epochs).to(torch.device('cuda'))
+model = ResNet18(epochs=args.epochs, drop_path_prob=args.drop_path_prob).to(torch.device('cuda'))
 model.verbose = True
 print(model, file=sys.stderr)
 
@@ -256,11 +257,13 @@ for epoch in range(args.epochs + args.extra + args.burnout):
     train = model.train_epoch(dataloaders, mode='train')
     test  = model.eval_epoch(dataloaders, mode='test')
     print(json.dumps({
-        "epoch"     : int(epoch),
-        "lr"        : model.hp['lr'],
-        "test_acc"  : float(test['acc']),
-        "train_acc" : float(train['acc']),
-        "time"      : time() - t,
+        "epoch"      : int(epoch),
+        "lr"         : model.hp['lr'],
+        "test_acc"   : float(test['acc']),
+        "train_acc"  : float(train['acc']),
+        "test_loss"  : float(test['loss'][-1]),
+        "train_loss" : float(train['loss'][-1]),
+        "time"       : time() - t,
     }))
     sys.stdout.flush()
 

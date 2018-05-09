@@ -23,16 +23,16 @@ for p in sys.argv[1:]:
     epoch = [d['epoch'] for d in data]
     _ = plt.plot(epoch, acc, alpha=0.75, label=p)
     
-    if 'train_acc' in data[0]:
-        acc   = [d['train_acc'] for d in data]
-        epoch = [d['epoch'] for d in data]
-        _ = plt.plot(epoch, acc, alpha=0.75, label=p)
+    # if 'train_acc' in data[0]:
+    #     acc   = [d['train_acc'] for d in data]
+    #     epoch = [d['epoch'] for d in data]
+    #     _ = plt.plot(epoch, acc, alpha=0.75, label=p + ' (tr)')
 
 _ = plt.legend(loc='lower right')
-_ = plt.grid(alpha=0.25)
+# _ = plt.grid(alpha=0.25)
 for t in np.arange(0.90, 1.0, 0.01):
     _ = plt.axhline(t, c='grey', alpha=0.25, lw=1)
 
-_ = plt.ylim(0.5, 1.0)
+_ = plt.ylim(0.8, 1.0)
 # _ = plt.xlim(0, 40)
 show_plot()
