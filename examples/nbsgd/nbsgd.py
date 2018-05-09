@@ -142,6 +142,9 @@ model.init_optimizer(
     weight_decay=args.weight_decay,
 )
 
+# --
+# Train
+
 print('nbsgd.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs):
