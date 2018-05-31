@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--sgdr-period-length', type=int, default=10)
     parser.add_argument('--sgdr-t-mult', type=int, default=2)
     
-    parser.add_argument('--seed', type=int, default=789)
+    parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--download', action="store_true")
     return parser.parse_args()
 
@@ -154,6 +154,7 @@ class ResNet18(BaseNet):
         return nn.Sequential(*layers)
     
     def forward(self, x):
+        x = x.half()
         x = self.prep(x)
         
         x = self.layers(x)
@@ -176,7 +177,7 @@ class ResNet18(BaseNet):
 print('cifar10.py: initializing model...', file=sys.stderr)
 
 cuda = torch.device('cuda')
-model = ResNet18().to(cuda)
+model = ResNet18().to(cuda).half()
 model.verbose = True
 print(model, file=sys.stderr)
 
