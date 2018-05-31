@@ -38,6 +38,10 @@ def parse_args():
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--batch-size', type=int, default=128)
+    
+    parser.add_argument('--sgdr-period-length', type=int, default=10)
+    parser.add_argument('--sgdr-t-mult', type=int, default=2)
+    
     parser.add_argument('--seed', type=int, default=789)
     parser.add_argument('--download', action="store_true")
     return parser.parse_args()
@@ -183,6 +187,12 @@ print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
 if args.lr_schedule == 'linear_cycle':
     lr_scheduler = HPSchedule.linear_cycle(hp_max=args.lr_max, epochs=args.epochs, extra=args.extra)
+elif args.lr_schedule == 'sgdr':
+    lr_scheduler = HPSchedule.sgdr(
+        hp_init=args.lr_max,
+        period_length=args.sgdr_period_length,
+        t_mult=args.sgdr_t_mult,
+    )
 else:
     lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
 
@@ -207,6 +217,7 @@ for epoch in range(args.epochs + args.extra + args.burnout):
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
         "test_acc"  : float(test['acc']),
+        "train_acc" : float(train['acc']),
         "time"      : time() - t,
     }))
     sys.stdout.flush()

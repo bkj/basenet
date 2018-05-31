@@ -10,6 +10,7 @@ from __future__ import print_function, division
 
 import sys
 import copy
+import warnings
 import numpy as np
 from tqdm import tqdm
 
@@ -44,6 +45,10 @@ def _set_hp(optimizer, hp_name, hp_hp):
     for i, param_group in enumerate(optimizer.param_groups):
         param_group[hp_name] = hp_hp[i]
 
+def maybe_warn_kwargs(kwargs):
+    if len(kwargs):
+        warnings.warn("\n\nHPSchedule: unused arguments:\n %s \n\n" % str(kwargs), RuntimeWarning)
+
 # --
 
 class HPSchedule(object):
@@ -54,19 +59,20 @@ class HPSchedule(object):
             _set_hp(optimizer, hp_name, hp_hp)
     
     @staticmethod
-    def constant(hp_init=0.1, **kwargs):
+    def constant(hp_max=0.1, **kwargs):
+        maybe_warn_kwargs(kwargs)
         def f(progress):
-            return hp_init
+            return hp_max
         
         return f
     
     @staticmethod
-    def step(hp_init=0.1, breaks=(150, 250), factors=(0.1, 0.1)):
+    def step(hp_max=0.1, breaks=(150, 250), factors=(0.1, 0.1)):
         """ Step function learning rate annealing """
         assert len(breaks) == len(factors)
         breaks = np.array(breaks)
         def f(progress):
-            return hp_init * np.prod(factors[:((progress >= breaks).sum())])
+            return hp_max * np.prod(factors[:((progress >= breaks).sum())])
         
         return f
     
