@@ -42,11 +42,12 @@ def _to_device(x, device):
 class Metrics:
     @staticmethod
     def n_correct(output, target):
-        if isinstance(target, list):
-            correct = (output.max(dim=-1)[1] == target[0]).long().sum()
-        else:
-            correct = (output.max(dim=-1)[1] == target).long().sum()
+        if isinstance(output, tuple) or isinstance(output, list):
+            output = output[0]
+        if isinstance(target, tuple) or isinstance(output, list):
+            target = target[0]
         
+        correct = (output.max(dim=-1)[1] == target).long().sum()
         return int(correct)
 
 # --
