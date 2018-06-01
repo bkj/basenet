@@ -31,10 +31,23 @@ def _set_train(x, mode):
     return x
 
 def _to_device(x, device):
-    if isinstance(x, tuple) or isinstance(x, list):
-        return [xx.to(device) for xx in x]
+    if TORCH_VERSION_4:
+        if isinstance(x, tuple) or isinstance(x, list):
+            return [xx.to(device) for xx in x]
+        else:
+            return x.to(device)
     else:
-        return x.to(device)
+        return x.cuda()
+
+class Metrics:
+    @staticmethod
+    def n_correct(output, target):
+        if isinstance(target, list):
+            correct = (output.max(dim=-1)[1] == target[0]).long().sum()
+        else:
+            correct = (output.max(dim=-1)[1] == target).long().sum()
+        
+        return int(correct)
 
 # --
 # Model
@@ -63,6 +76,21 @@ class BaseNet(nn.Module):
     # --
     # Optimization
     
+    def _filter_requires_grad(self, params):
+        # User shouldn't be passing variables that don't require gradients
+        if isinstance(params[0], dict):
+            check = np.all([np.all([pp.requires_grad for pp in p['params']]) for p in params]) 
+        else:
+            check = np.all([p.requires_grad for p in params])
+        
+        if not check:
+            warnings.warn((
+                'BaseNet.init_optimizer: some variables do not require gradients. '
+                'Ignoring them, but better to handle explicitly'
+            ), RuntimeWarning)
+        
+        return params
+    
     def init_optimizer(self, opt, params, hp_scheduler=None, clip_grad_norm=0, **kwargs):
         params = list(params)
         
@@ -73,13 +101,9 @@ class BaseNet(nn.Module):
             for hp_name, scheduler in hp_scheduler.items():
                 kwargs[hp_name] = scheduler(0)
         
-        if not np.all([p.requires_grad for p in params]):
-            warnings.warn((
-                'BaseNet.init_optimizer: some variables do not require gradients. '
-                'Ignoring them, but better to handle explicitly'
-            ), RuntimeWarning)
+        params = self._filter_requires_grad(params)
         
-        self.opt = opt([p for p in params if p.requires_grad], **kwargs)
+        self.opt = opt(params, **kwargs)
         self.set_progress(0)
     
     def set_progress(self, progress):
@@ -100,12 +124,16 @@ class BaseNet(nn.Module):
     # --
     # Batch steps
     
-    def train_batch(self, data, target):
-        _ = self.train()
+    def train_batch(self, data, target, metric_fns=None):
+        assert self.training, 'self.training == False'
+        
+        self.opt.zero_grad()
+        
+        if not TORCH_VERSION_4:
+            data, target = Variable(data, volatile=False), Variable(target, volatile=False)
         
         data, target = _to_device(data, self.device), _to_device(target, self.device)
         
-        self.opt.zero_grad()
         output = self(data)
         loss = self.loss_fn(output, target)
         loss.backward()
@@ -115,24 +143,32 @@ class BaseNet(nn.Module):
         
         self.opt.step()
         
-        return output, float(loss)
+        metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
+        return output, float(loss), metrics
     
-    
-    def eval_batch(self, data, target):
-        _ = self.eval()
+    def eval_batch(self, data, target, metric_fns=None):
+        assert not self.training, 'self.training == True'
         
-        with torch.no_grad():
+        def _eval(data, target, metric_fns):
             data, target = _to_device(data, self.device), _to_device(target, self.device)
             
             output = self(data)
             loss = self.loss_fn(output, target)
             
-            return output, float(loss)
+            metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
+            return output, float(loss), metrics
+        
+        if TORCH_VERSION_4:
+            with torch.no_grad():
+                return _eval(data, target, metric_fns)
+        else:
+            data, target = Variable(data, volatile=True), Variable(target, volatile=True)
+            return _eval(data, target, metric_fns)
     
     # --
     # Epoch steps
     
-    def _run_epoch(self, dataloaders, mode, num_batches, batch_fn, set_progress, desc):
+    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=True):
         loader = dataloaders[mode]
         if loader is None:
             return None
@@ -141,60 +177,63 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='%s:%s' % (desc, mode))
             
+            metric_fns = []
+            if compute_acc:
+                metric_fns = [Metrics.n_correct]
+            
+            if hasattr(self, 'reset'):
+                self.reset()
             
             correct, total, loss_hist = 0, 0, [None] * len(loader)
             for batch_idx, (data, target) in gen:
                 if set_progress:
                     self.set_progress(self.epoch + batch_idx / len(loader))
                 
-                output, loss = batch_fn(data, target)
-                loss_hist[batch_idx] = loss
+                output, loss, metrics = batch_fn(data, target, metric_fns=metric_fns)
                 
-                # >>
-                if isinstance(target, list):
-                    correct += (to_numpy(output).argmax(axis=1) == to_numpy(target[0])).sum()
-                else:
-                    correct += (to_numpy(output).argmax(axis=1) == to_numpy(target)).sum()
-                # <<
-                total   += data.shape[0]
+                loss_hist[batch_idx] = loss
+                if compute_acc:
+                    correct += metrics[0]
+                    total   += target.shape[0]
                 
                 if batch_idx > num_batches:
                     break
                 
                 if self.verbose:
-                    gen.set_postfix(acc=correct / total)
+                    gen.set_postfix(**{
+                        "acc"  : correct / total if compute_acc else -1.0,
+                        "loss" : loss,
+                    })
             
             if set_progress:
                 self.epoch += 1
             
             return {
-                "acc"  : float(correct / total),
+                "acc"  : float(correct / total) if compute_acc else -1.0,
                 "loss" : list(map(float, loss_hist)),
             }
     
-    def train_epoch(self, dataloaders, mode='train', num_batches=np.inf):
+    def train_epoch(self, dataloaders, mode='train', **kwargs):
         assert self.opt is not None, "BaseWrapper: self.opt is None"
-        
+        _ = self.train()
         return self._run_epoch(
             dataloaders=dataloaders,
             mode=mode,
-            num_batches=num_batches,
-            
             batch_fn=self.train_batch,
             set_progress=True,
             desc="train_epoch",
+            **kwargs,
         )
         
-    def eval_epoch(self, dataloaders, mode='val', num_batches=np.inf):
-        
+    def eval_epoch(self, dataloaders, mode='val', **kwargs):
+        _ = self.eval()
         return self._run_epoch(
             dataloaders=dataloaders,
             mode=mode,
-            num_batches=num_batches,
-            
             batch_fn=self.eval_batch,
             set_progress=False,
             desc="eval_epoch",
+            **kwargs,
         )
     
     def predict(self, dataloaders, mode='val'):

@@ -92,6 +92,9 @@ def get_num_features(model):
         if res is not None:
             return res
 
-def parameters_from_children(children):
-    parameters = [list(c.parameters()) for c in get_children(children)]
-    return reduce(lambda a,b: a + b, parameters)
+def parameters_from_children(x, only_requires_grad=False):
+    parameters = [list(c.parameters()) for c in get_children(x)]
+    parameters = sum(parameters, [])
+    if only_requires_grad:
+        parameters = [p for p in parameters if p.requires_grad]
+    return parameters

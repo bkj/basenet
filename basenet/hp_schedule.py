@@ -272,9 +272,16 @@ if __name__ == "__main__":
     # show_plot()
     
     # Piecewise linear
-    hp = HPSchedule.piecewise_linear(breaks=[0, 5, 10, 15], hps=[0, 1, 0.25, 0])
-    hps = np.vstack([hp(i) for i in np.linspace(-1, 40, 1000)])
-    _ = plt.plot(hps)
+    vals = [    
+        np.array([0.1, 0.5, 1.0]) * 0.0,
+        np.array([0.1, 0.5, 1.0]) * 1.0,
+        np.array([0.1, 0.5, 1.0]) * 0.5,
+    ]
+    hp = HPSchedule.piecewise_linear(breaks=[0, 0.5, 1], vals=vals)
+    hps = np.vstack([hp(i) for i in np.linspace(-1, 2, 1000)])
+    _ = plt.plot(hps[:,0])
+    _ = plt.plot(hps[:,1])
+    _ = plt.plot(hps[:,2])
     show_plot()
     
     # # Cyclical
