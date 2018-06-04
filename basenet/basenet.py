@@ -37,7 +37,12 @@ def _to_device(x, device):
         else:
             return x.to(device)
     else:
-        return x.cuda()
+        if device == 'cuda':
+            return x.cuda()
+        elif device == 'cpu':
+            return x.cpu()
+        else:
+            raise Exception
 
 class Metrics:
     @staticmethod
@@ -72,7 +77,16 @@ class BaseNet(nn.Module):
     
     def to(self, device=None):
         self.device = device
-        super().to(device=device)
+        if TORCH_VERSION_4:
+            super().to(device=device)
+        else:
+            if device == 'cuda':
+                self.cuda()
+            elif device == 'cpu':
+                self.cpu()
+            else:
+                raise Exception
+        
         return self
     
     # --
@@ -252,11 +266,19 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='predict:%s' % mode)
             
+            if hasattr(self, 'reset'):
+                self.reset()
+            
             for _, (data, target) in gen:
-                with torch.no_grad():
-                    data = _to_device(data, self.device)
-                    all_output.append(self(data).cpu())
-                    all_target.append(target)
+                if TORCH_VERSION_4:
+                    with torch.no_grad():
+                        output = self(_to_device(data, self.device)).cpu()
+                else:
+                    data = Variable(data, volatile=True)
+                    output = self(_to_device(data, self.device)).cpu()
+                
+                all_output.append(output)
+                all_target.append(target)
         
         return torch.cat(all_output), torch.cat(all_target)
     

@@ -27,7 +27,7 @@ def text_collate_fn(batch, pad_value=1):
     X, y = zip(*batch)
     
     max_len = max([len(xx) for xx in X])
-    X = [F.pad(xx, pad=(max_len - len(xx), 0), value=pad_value) for xx in X]
+    X = [F.pad(xx, pad=(max_len - len(xx), 0), value=pad_value).data for xx in X]
     
     X = torch.stack(X, dim=-1)
     y = torch.LongTensor(y)
