@@ -131,7 +131,7 @@ class BaseNet(nn.Module):
         self.opt.zero_grad()
         
         if not TORCH_VERSION_4:
-            data, target = Variable(data, volatile=False), Variable(target, volatile=False)
+            data, target = Variable(data), Variable(target)
         
         data, target = _to_device(data, self.device), _to_device(target, self.device)
         
@@ -145,7 +145,7 @@ class BaseNet(nn.Module):
         self.opt.step()
         
         metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
-        return output, float(loss), metrics
+        return float(loss), metrics
     
     def eval_batch(self, data, target, metric_fns=None):
         assert not self.training, 'self.training == True'
@@ -157,7 +157,7 @@ class BaseNet(nn.Module):
             loss = self.loss_fn(output, target)
             
             metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
-            return output, float(loss), metrics
+            return float(loss), metrics
         
         if TORCH_VERSION_4:
             with torch.no_grad():
@@ -190,7 +190,7 @@ class BaseNet(nn.Module):
                 if set_progress:
                     self.set_progress(self.epoch + batch_idx / len(loader))
                 
-                output, loss, metrics = batch_fn(data, target, metric_fns=metric_fns)
+                loss, metrics = batch_fn(data, target, metric_fns=metric_fns)
                 
                 loss_hist[batch_idx] = loss
                 if compute_acc:
