@@ -57,6 +57,7 @@ class BaseNet(nn.Module):
     
     def __init__(self, loss_fn=F.cross_entropy, verbose=False):
         super().__init__()
+        
         self.loss_fn = loss_fn
         
         self.opt          = None
@@ -126,7 +127,8 @@ class BaseNet(nn.Module):
     # Batch steps
     
     def train_batch(self, data, target, metric_fns=None):
-        assert self.training, 'self.training == False'
+        assert self.loss_fn is not None, 'BaseNet: self.loss_fn is None'
+        assert self.training, 'BaseNet: self.training == False'
         
         self.opt.zero_grad()
         
@@ -148,7 +150,7 @@ class BaseNet(nn.Module):
         return float(loss), metrics
     
     def eval_batch(self, data, target, metric_fns=None):
-        assert not self.training, 'self.training == True'
+        assert not self.training, 'BaseNet: self.training == True'
         
         def _eval(data, target, metric_fns):
             data, target = _to_device(data, self.device), _to_device(target, self.device)
@@ -215,7 +217,7 @@ class BaseNet(nn.Module):
             }
     
     def train_epoch(self, dataloaders, mode='train', **kwargs):
-        assert self.opt is not None, "BaseWrapper: self.opt is None"
+        assert self.opt is not None, "BaseNet: self.opt is None"
         _ = self.train()
         return self._run_epoch(
             dataloaders=dataloaders,
