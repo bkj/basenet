@@ -2,11 +2,6 @@
 
 """
     cifar10.py
-    
-    Train preactivation ResNet18 on CIFAR10 w/ linear learning rate annealing
-    
-    After 50 epochs:
-        {"epoch": 49, "lr": 5.115089514063697e-06, "test_loss": 0.3168042216449976, "test_acc": 0.9355}
 """
 
 from __future__ import division, print_function
@@ -47,7 +42,7 @@ def parse_args():
     parser.add_argument('--sgdr-period-length', type=int, default=10)
     parser.add_argument('--sgdr-t-mult', type=int, default=2)
     
-    parser.add_argument('--seed', type=int, default=789)
+    parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--download', action="store_true")
     return parser.parse_args()
 
@@ -107,7 +102,7 @@ dataloaders = {
 class PreActBlock(nn.Module):
     
     def __init__(self, in_channels, out_channels, stride=1):
-        super(PreActBlock, self).__init__()
+        super().__init__()
         
         self.bn1   = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
@@ -129,7 +124,7 @@ class PreActBlock(nn.Module):
 
 class ResNet18(BaseNet):
     def __init__(self, num_blocks=[2, 2, 2, 2], num_classes=10):
-        super(ResNet18, self).__init__(loss_fn=F.cross_entropy)
+        super().__init__(loss_fn=F.cross_entropy)
         
         self.in_channels = 64
         
@@ -159,6 +154,7 @@ class ResNet18(BaseNet):
         return nn.Sequential(*layers)
     
     def forward(self, x):
+        x = x.half()
         x = self.prep(x)
         
         x = self.layers(x)
@@ -180,7 +176,8 @@ class ResNet18(BaseNet):
 
 print('cifar10.py: initializing model...', file=sys.stderr)
 
-model = ResNet18().to(torch.device('cuda'))
+cuda = torch.device('cuda')
+model = ResNet18().to(cuda).half()
 model.verbose = True
 print(model, file=sys.stderr)
 
@@ -189,14 +186,16 @@ print(model, file=sys.stderr)
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-if args.lr_schedule != 'sgdr':
-    lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
-else:
+if args.lr_schedule == 'linear_cycle':
+    lr_scheduler = HPSchedule.linear_cycle(hp_max=args.lr_max, epochs=args.epochs, extra=args.extra)
+elif args.lr_schedule == 'sgdr':
     lr_scheduler = HPSchedule.sgdr(
         hp_init=args.lr_max,
         period_length=args.sgdr_period_length,
         t_mult=args.sgdr_t_mult,
     )
+else:
+    lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
 
 model.init_optimizer(
     opt=torch.optim.SGD,

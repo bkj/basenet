@@ -14,5 +14,5 @@ mv aclImdb ./data/aclImdb
 # Run
 
 python prep.py
-
 python nbsgd.py
+
