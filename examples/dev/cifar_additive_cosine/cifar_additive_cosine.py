@@ -125,6 +125,9 @@ class NormLinear(nn.Linear):
             sim.scatter_(1, y, sim.gather(1, y) - self.ac_m)
         
         return self.ac_s * sim
+    
+    def __repr__(self):
+        return 'NormLinear(ac_m=%f | ac_s=%f)' % (self.ac_m, self.ac_s)
 
 
 class PreActBlock(nn.Module):

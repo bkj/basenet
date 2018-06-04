@@ -15,8 +15,8 @@ def parse_args():
     return parser.parse_args()
 
 ranges = {
-    "ac_m" : (0, 0.5),
-    "ac_s" : (0, 6),
+    "ac_m" : (0, 0.2),
+    "ac_s" : (3, 5),
 }
 
 if __name__ == '__main__':
