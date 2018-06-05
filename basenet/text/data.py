@@ -49,7 +49,7 @@ class SortishSampler(Sampler):
         batch_order     = np.argsort([self._key(b[0]) for b in batches])[::-1]
         batch_order[1:] = np.random.permutation(batch_order[1:])
         
-        idxs            = np.hstack([batches[i] for i in batch_order])
+        idxs = np.hstack([batches[i] for i in batch_order])
         return iter(idxs)
 
 
