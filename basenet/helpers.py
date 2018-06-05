@@ -63,7 +63,7 @@ def set_freeze(x, mode):
     for p in x.parameters():
         p.requires_grad = not mode
     
-    for module in x.children():
+    for module in get_children(x):
         set_freeze(module, mode)
 
 

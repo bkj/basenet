@@ -24,6 +24,7 @@ TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
 # Helpers
 
 def _set_train(x, mode):
+    # !! Do we want to always turn off `training` mode when the layer is frozen?
     x.training = False if getattr(x, 'frozen', False) else mode
     for module in x.children():
         _set_train(module, mode)
@@ -156,7 +157,10 @@ class BaseNet(nn.Module):
         loss.backward()
         
         if self.clip_grad_norm > 0:
-            torch.nn.utils.clip_grad_norm(self.parameters(), self.clip_grad_norm)
+            if TORCH_VERSION_4:
+                torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_grad_norm)
+            else:
+                torch.nn.utils.clip_grad_norm(self.parameters(), self.clip_grad_norm)
         
         self.opt.step()
         

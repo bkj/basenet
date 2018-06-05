@@ -3,5 +3,9 @@ from __future__ import absolute_import
 from .basenet import BaseNet, BaseWrapper
 from .hp_schedule import HPSchedule
 from . import helpers
-from . import vision
 from . import text
+
+try:
+    from . import vision
+except:
+    pass
