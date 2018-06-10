@@ -62,14 +62,14 @@ if __name__ == "__main__":
     
     text_train, y_train = texts_from_folders('data/aclImdb/train', ['neg', 'pos'])
     text_test, y_test = texts_from_folders('data/aclImdb/test', ['neg', 'pos'])
-
+    
     # --
     # Preprocess
     print("prep.py: preprocessing", file=sys.stderr)
-
+    
     re_tok = re.compile('([%s“”¨«»®´·º½¾¿¡§£₤‘’])' % string.punctuation)
     tokenizer = lambda x: re_tok.sub(r' \1 ', x).split()
-
+    
     vectorizer = CountVectorizer(
         ngram_range=tuple(map(int, args.ngram_range.split(','))),
         tokenizer=tokenizer, 
@@ -77,10 +77,10 @@ if __name__ == "__main__":
     )
     X_train = vectorizer.fit_transform(text_train)
     X_test = vectorizer.transform(text_test)
-
+    
     X_train_words, _ = bow2adjlist(X_train, maxcols=args.max_words)
     X_test_words, _ = bow2adjlist(X_test, maxcols=args.max_words)
-
+    
     # --
     # Save
     print("prep.py: saving", file=sys.stderr)
