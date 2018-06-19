@@ -116,6 +116,7 @@ class BaseNet(nn.Module):
         
         if hp_scheduler is not None:
             for hp_name, scheduler in hp_scheduler.items():
+                assert hp_name not in kwargs.keys(), '%s in kwargs.keys()' % hp_name
                 kwargs[hp_name] = scheduler(0)
         
         params = self._filter_requires_grad(params)
@@ -189,7 +190,7 @@ class BaseNet(nn.Module):
     # --
     # Epoch steps
     
-    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=True):
+    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=False):
         loader = dataloaders[mode]
         if loader is None:
             return None
@@ -225,6 +226,12 @@ class BaseNet(nn.Module):
                         "acc"  : correct / total if compute_acc else -1.0,
                         "loss" : loss,
                     })
+            
+            if self.verbose:
+                gen.set_postfix(**{
+                    "acc"          : correct / total if compute_acc else -1.0,
+                    "last_10_loss" : np.mean(loss[-10:]),
+                })
             
             if set_progress:
                 self.epoch += 1
