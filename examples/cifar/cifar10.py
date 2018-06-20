@@ -186,16 +186,16 @@ print(model, file=sys.stderr)
 
 print('cifar10.py: initializing optimizer...', file=sys.stderr)
 
-if args.lr_schedule == 'linear_cycle':
-    lr_scheduler = HPSchedule.linear_cycle(hp_max=args.lr_max, epochs=args.epochs, extra=args.extra)
-elif args.lr_schedule == 'sgdr':
-    lr_scheduler = HPSchedule.sgdr(
-        hp_init=args.lr_max,
-        period_length=args.sgdr_period_length,
-        t_mult=args.sgdr_t_mult,
-    )
-else:
-    lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
+# if args.lr_schedule == 'linear_cycle':
+#     lr_scheduler = HPSchedule.linear_cycle(hp_max=args.lr_max, epochs=args.epochs, extra=args.extra)
+# elif args.lr_schedule == 'sgdr':
+#     lr_scheduler = HPSchedule.sgdr(
+#         hp_init=args.lr_max,
+#         period_length=args.sgdr_period_length,
+#         t_mult=args.sgdr_t_mult,
+#     )
+# else:
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, hi_acc=1.0)
 
 model.init_optimizer(
     opt=torch.optim.SGD,

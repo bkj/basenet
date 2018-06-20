@@ -77,10 +77,15 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def linear(hp_max=0.1, epochs=10):
+    def linear(hp_max=0.1, hi_acc=1.0, lo_acc=0.80):
         def f(progress):
             """ Linear learning rate annealing """
-            return hp_max * float(epochs - progress) / epochs
+            if progress < lo_acc:
+                return hp_max
+            elif progress < hi_acc:
+                return hp_max * float(hi_acc - progress) / (hi_acc - lo_acc)
+            else:
+                return hp_max / 1000
         
         return f
     
@@ -164,6 +169,7 @@ class HPSchedule(object):
             return hp_init * mult ** progress
             
         return f
+
 
 # --
 # HP Finder

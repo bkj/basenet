@@ -6,6 +6,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+import sys
 import numpy as np
 from tqdm import tqdm
 import warnings
@@ -75,6 +76,8 @@ class BaseNet(nn.Module):
         
         self.verbose = verbose
         self.device = None
+        
+        self.acc = 0.0
     
     def to(self, device=None):
         self.device = device
@@ -190,6 +193,9 @@ class BaseNet(nn.Module):
     # Epoch steps
     
     def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=True):
+        assert compute_acc, "not compute_acc"
+        alpha = 0.05
+        
         loader = dataloaders[mode]
         if loader is None:
             return None
@@ -206,9 +212,11 @@ class BaseNet(nn.Module):
                 self.reset()
             
             correct, total, loss_hist = 0, 0, [None] * len(loader)
+            acc = 0.0
             for batch_idx, (data, target) in gen:
                 if set_progress:
-                    self.set_progress(self.epoch + batch_idx / len(loader))
+                    # self.set_progress(self.epoch + batch_idx / len(loader))
+                    self.set_progress(self.acc)
                 
                 loss, metrics = batch_fn(data, target, metric_fns=metric_fns)
                 
@@ -221,8 +229,14 @@ class BaseNet(nn.Module):
                     break
                 
                 if self.verbose:
+                    acc = correct / total
+                    if self.acc == 0:
+                        self.acc = acc
+                    else:
+                        self.acc = (1 - alpha) * self.acc + alpha * acc
+                    
                     gen.set_postfix(**{
-                        "acc"  : correct / total if compute_acc else -1.0,
+                        "acc"  : acc if compute_acc else -1.0,
                         "loss" : loss,
                     })
             
