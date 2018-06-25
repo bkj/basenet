@@ -4,6 +4,8 @@
     hp_schedule.py
     
     Optimizer hyperparameter scheduler
+    
+    !! Most of the schedulers could be reimplemented as compound schedules (prod or cat)
 """
 
 from __future__ import print_function, division
@@ -67,34 +69,57 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def step(hp_max=0.1, breaks=(150, 250), factors=(0.1, 0.1)):
+    def step(hp_max=0.1, breaks=(150, 250), factors=(0.1, 0.1), epochs=None, repeat=True):
         """ Step function learning rate annealing """
         assert len(breaks) == len(factors)
         breaks = np.array(breaks)
+        
         def f(progress):
+            if repeat:
+                progress = progress % epochs
+            
             return hp_max * np.prod(factors[:((progress >= breaks).sum())])
         
         return f
     
     @staticmethod
-    def linear(hp_max=0.1, epochs=10):
+    def linear(hp_max=0.1, epochs=None, repeat=True):
+        assert epochs is not None, "epochs is None"
+        
         def f(progress):
             """ Linear learning rate annealing """
-            return hp_max * float(epochs - progress) / epochs
+            
+            if repeat:
+                progress = progress % epochs
+            
+            return hp_max * (epochs - progress) / epochs
         
         return f
     
     @staticmethod
-    def linear_cycle(hp_max=0.1, epochs=10, low_hp=0.005, extra=5):
+    def cyclical(hp_max=0.1, epochs=None, period_length=1, repeat=True):
+        assert epochs is not None, "epochs is None"
+        
+        return HPSchedule.prod_schedule([
+            HPSchedule.stepify(HPSchedule.linear(epochs=epochs, hp_max=hp_max, repeat=repeat)),
+            HPSchedule.linear(epochs=period_length, hp_max=1, repeat=True),
+        ])
+    
+    @staticmethod
+    def linear_cycle(*args, **kwargs):
+        raise Exception('!! Renamed to one_cycle')
+    
+    @staticmethod
+    def one_cycle(hp_max=0.1, epochs=10, hp_init=0.0, hp_final=0.005, extra=5):
         def f(progress):
             if progress < epochs / 2:
-                return 2 * hp_max * (1 - float(epochs - progress) / epochs)
+                return 2 * hp_max * (1 - (epochs - progress) / epochs)
             elif progress <= epochs:
-                return low_hp + 2 * hp_max * float(epochs - progress) / epochs
+                return hp_final + 2 * (hp_max - hp_final) * (epochs - progress) / epochs
             elif progress <= epochs + extra:
-                return low_hp * float(extra - (progress - epochs)) / extra
+                return hp_final * (extra - (progress - epochs)) / extra
             else:
-                return low_hp / 10
+                return hp_final / 10
         
         return f
     
@@ -121,15 +146,7 @@ class HPSchedule(object):
         return f
     
     @staticmethod
-    def cyclical(hp_init=0.1, hp_burn_in=0.05, epochs=10):
-        def f(progress):
-            """ Cyclical learning rate w/ annealing """
-            return hp_init * (1 - progress % 1) * (epochs - np.floor(progress)) / epochs
-        
-        return f
-    
-    @staticmethod
-    def sgdr(hp_init=0.1, period_length=50, hp_min=0, t_mult=1):
+    def sgdr(hp_max=0.1, period_length=50, hp_min=0, t_mult=1):
         def f(progress):
             """ SGDR learning rate annealing """
             if t_mult > 1:
@@ -140,7 +157,7 @@ class HPSchedule(object):
             else:
                 period_progress = (progress % period_length) / period_length
             
-            return hp_min + 0.5 * (hp_init - hp_min) * (1 + np.cos(period_progress * np.pi))
+            return hp_min + 0.5 * (hp_max - hp_min) * (1 + np.cos(period_progress * np.pi))
         
         return f
     
@@ -164,6 +181,35 @@ class HPSchedule(object):
             return hp_init * mult ** progress
             
         return f
+    
+    # --
+    # Compound schedules
+    
+    @staticmethod
+    def stepify(fn):
+        def f(progress):
+            progress = np.floor(progress)
+            return fn(progress)
+        
+        return f
+    
+    @staticmethod
+    def prod_schedule(fns):
+        def f(progress):
+            return np.prod([fn(progress) for fn in fns], axis=0)
+        
+        return f
+        
+    # @staticmethod
+    # def cat_schedule(fns, breaks):
+    #     def f(progress):
+    #         assert isinstance(progress, float), "not isinstance(progress, float)"
+            
+    #         for i,b in list(enumerate(breaks))[::-1]:
+    #             if progress > b:
+    #                 return fns[i](progress)
+        
+    #     return f
 
 # --
 # HP Finder
@@ -186,7 +232,7 @@ class HPFind(object):
             hp_init *= hp_mults
             hp_max *= hp_mults # Correct?
         
-        hp_scheduler = HPSchedule.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
+        hp_scheduler = HPFind.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
         
         if params is None:
             params = model.parameters()
@@ -251,52 +297,59 @@ if __name__ == "__main__":
     from rsub import *
     from matplotlib import pyplot as plt
     
-    # # Step
-    # hp = HPSchedule.step(hp_init=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20))
-    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
+    # Step
+    # hp = HPSchedule.step(hp_max=np.array([1, 2]), factors=(0.5, 0.5), breaks=(10, 20), epochs=30)
+    # hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
     # _ = plt.plot(hps[:,0])
     # _ = plt.plot(hps[:,1])
     # show_plot()
     
-    # # Linear
-    # hp = HPSchedule.linear(epochs=30, hp_init=np.array([1, 2]))
-    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(hps[:,0])
-    # _ = plt.plot(hps[:,1])
+    # Linear
+    # hp = HPSchedule.linear(epochs=30, hp_max=0.1)
+    # hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
+    # _ = plt.plot(hps)
     # show_plot()
     
-    # Linear cycle
-    # hp = HPSchedule.linear_cycle(epochs=30, hp_init=0.1, extra=10)
-    # hps = np.vstack([hp(i) for i in np.linspace(0, 40, 1000)])
+    # # Linear cycle
+    # hp = HPSchedule.one_cycle(epochs=30, hp_max=0.1, extra=10)
+    # hps = np.vstack([hp(i) for i in np.arange(0, 40, 0.01)])
     # _ = plt.plot(hps)
     # show_plot()
     
     # Piecewise linear
-    vals = [    
-        np.array([0.1, 0.5, 1.0]) * 0.0,
-        np.array([0.1, 0.5, 1.0]) * 1.0,
-        np.array([0.1, 0.5, 1.0]) * 0.5,
-    ]
-    hp = HPSchedule.piecewise_linear(breaks=[0, 0.5, 1], vals=vals)
-    hps = np.vstack([hp(i) for i in np.linspace(-1, 2, 1000)])
-    _ = plt.plot(hps[:,0])
-    _ = plt.plot(hps[:,1])
-    _ = plt.plot(hps[:,2])
+    # vals = [    
+    #     np.array([0.1, 0.5, 1.0]) * 0.0,
+    #     np.array([0.1, 0.5, 1.0]) * 1.0,
+    #     np.array([0.1, 0.5, 1.0]) * 0.5,
+    # ]
+    # hp = HPSchedule.piecewise_linear(breaks=[0, 0.5, 1], vals=vals)
+    # hps = np.vstack([hp(i) for i in np.arange(-1, 2, 0.01)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
+    # _ = plt.plot(hps[:,2])
+    # show_plot()
+    
+    # Cyclical
+    # hp = HPSchedule.cyclical(epochs=30, hp_max=0.1)
+    # hps = np.vstack([hp(i) for i in np.arange(0, 40, 0.01)])
+    # _ = plt.plot(hps)
+    # show_plot()
+    
+    # SGDR
+    # hp = HPSchedule.sgdr(period_length=10, t_mult=2, hp_max=np.array([1, 2]))
+    # hps = np.vstack([hp(i) for i in np.arange(0, 70, 0.01)])
+    # _ = plt.plot(hps[:,0])
+    # _ = plt.plot(hps[:,1])
+    # show_plot()
+    
+    # Product
+    hp = HPSchedule.prod_schedule([
+        HPSchedule.stepify(HPSchedule.linear(epochs=30, hp_max=0.1)),
+        HPSchedule.linear(epochs=1, hp_max=1),
+    ])
+    hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
+    _ = plt.plot(hps)
     show_plot()
-    
-    # # Cyclical
-    # hp = HPSchedule.cyclical(epochs=30, hp_init=np.array([1, 2]))
-    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(hps[:,0])
-    # _ = plt.plot(hps[:,1])
-    # show_plot()
-    
-    # # SGDR
-    # hp = HPSchedule.sgdr(period_length=10, t_mult=2, hp_init=np.array([1, 2]))
-    # hps = np.vstack([hp(i) for i in np.linspace(0, 30, 1000)])
-    # _ = plt.plot(hps[:,0])
-    # _ = plt.plot(hps[:,1])
-    # show_plot()
     
     # exponential increase (for setting learning rates)
     # hp = HPSchedule.exponential_increase(hp_init=np.array([1e-5, 1e-4]), hp_max=10, num_steps=100)
