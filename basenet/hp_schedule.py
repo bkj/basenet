@@ -200,16 +200,24 @@ class HPSchedule(object):
         
         return f
         
-    # @staticmethod
-    # def cat_schedule(fns, breaks):
-    #     def f(progress):
-    #         assert isinstance(progress, float), "not isinstance(progress, float)"
-            
-    #         for i,b in list(enumerate(breaks))[::-1]:
-    #             if progress > b:
-    #                 return fns[i](progress)
+    @staticmethod
+    def cat_schedule(fns, breaks):
+        # !! Won't work w/ np.arrays
+        assert len(fns) - 1 == len(breaks)
         
-    #     return f
+        def f(progress):
+            assert (isinstance(progess, float) or isinstance(progress, int))
+            
+            if progress < breaks[0]:
+                return fns[0](progress)
+            
+            for i in range(1, len(breaks)):
+                if progress < breaks[i]:
+                    return fns[i-1](progress)
+            
+            return fns[-1](progress)
+        
+        return f
 
 # --
 # HP Finder
