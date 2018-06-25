@@ -6,6 +6,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+import sys
 import numpy as np
 from tqdm import tqdm
 from copy import deepcopy
@@ -214,8 +215,11 @@ class BaseNet(nn.Module):
             if hasattr(self, 'reset'):
                 self.reset()
             
-            correct, total, loss_hist = 0, 0, [None] * len(loader)
+            correct, total, loss_hist = 0, 0, [None] * min(num_batches, len(loader))
             for batch_idx, (data, target) in gen:
+                if batch_idx >= num_batches:
+                    break
+                
                 if set_progress:
                     self.set_progress(self.epoch + batch_idx / len(loader))
                 
@@ -226,9 +230,6 @@ class BaseNet(nn.Module):
                     correct += metrics[0]
                     total   += target.shape[0]
                 
-                if batch_idx > num_batches:
-                    break
-                
                 if self.verbose:
                     gen.set_postfix(**{
                         "acc"  : correct / total if compute_acc else -1.0,
@@ -238,7 +239,7 @@ class BaseNet(nn.Module):
             if self.verbose:
                 gen.set_postfix(**{
                     "acc"          : correct / total if compute_acc else -1.0,
-                    "last_10_loss" : np.mean(loss[-10:]),
+                    "last_10_loss" : np.mean(loss_hist[-10:]),
                 })
             
             if set_progress:

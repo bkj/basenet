@@ -224,9 +224,10 @@ class HPFind(object):
         # Setup HP schedule
         
         if model.verbose:
-            print('HPFind.find: copying model')
+            print('HPFind.find: copying model', file=sys.stderr)
         
         model = model.deepcopy()
+        _ = model.train()
         
         if hp_mults is not None:
             hp_init *= hp_mults
@@ -262,7 +263,8 @@ class HPFind(object):
             
             model.set_progress(batch_idx)
             
-            _, loss = model.train_batch(data, target)
+            loss, _ = model.train_batch(data, target)
+            
             if smooth_loss:
                 avg_loss    = avg_loss * avg_mom + loss * (1 - avg_mom)
                 debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
@@ -270,7 +272,7 @@ class HPFind(object):
             else:
                 loss_hist.append(loss)
             
-            hp_hist.append(model.hp)
+            hp_hist.append(model.hp['lr'])
             
             if loss > np.min(loss_hist) * 4:
                 break
