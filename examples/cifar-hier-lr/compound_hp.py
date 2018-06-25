@@ -25,7 +25,7 @@ from matplotlib import pyplot as plt
 # --
 # Define schedules
 
-hp_max       = 0.1
+hp_max       = 0.2
 macro_epochs = 30
 micro_epochs = 1
 
