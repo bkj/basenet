@@ -28,7 +28,7 @@ df['micro'] = df.path.apply(lambda x: x.split('-')[1].split('_')[0])
 df['lr']    = df.path.apply(lambda x: float(x.split('_')[1].split('.')[0]))
 
 # >>
-df = df[df.lr == 0.2]
+df = df[df.lr == 0.1]
 # <<
 
 clookup = {
