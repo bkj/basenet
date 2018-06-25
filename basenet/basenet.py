@@ -8,6 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 from tqdm import tqdm
+from copy import deepcopy
 
 import torch
 from torch import nn
@@ -58,6 +59,13 @@ class BaseNet(nn.Module):
         self.device = device
         super().to(device=device)
         return self
+    
+    def deepcopy(self):
+        _device = self.device
+        del self.device
+        new_self = deepcopy(self).to(_device)
+        self.device = _device
+        return new_self
     
     # --
     # Optimization
