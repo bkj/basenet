@@ -342,14 +342,14 @@ if __name__ == "__main__":
     # _ = plt.plot(hps[:,1])
     # show_plot()
     
-    # Product
-    hp = HPSchedule.prod_schedule([
-        HPSchedule.stepify(HPSchedule.linear(epochs=30, hp_max=0.1)),
-        HPSchedule.linear(epochs=1, hp_max=1),
-    ])
-    hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
-    _ = plt.plot(hps)
-    show_plot()
+    # # Product
+    # hp = HPSchedule.prod_schedule([
+    #     HPSchedule.stepify(HPSchedule.linear(epochs=30, hp_max=0.1)),
+    #     HPSchedule.linear(epochs=1, hp_max=1),
+    # ])
+    # hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
+    # _ = plt.plot(hps)
+    # show_plot()
     
     # exponential increase (for setting learning rates)
     # hp = HPSchedule.exponential_increase(hp_init=np.array([1e-5, 1e-4]), hp_max=10, num_steps=100)
