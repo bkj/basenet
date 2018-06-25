@@ -6,8 +6,10 @@
 
 from __future__ import print_function, division, absolute_import
 
+import sys
 import numpy as np
 from tqdm import tqdm
+from copy import deepcopy
 import warnings
 
 import torch
@@ -90,6 +92,13 @@ class BaseNet(nn.Module):
         
         return self
     
+    def deepcopy(self):
+        _device = self.device
+        del self.device
+        new_self = deepcopy(self).to(_device)
+        self.device = _device
+        return new_self
+    
     # --
     # Optimization
     
@@ -116,6 +125,7 @@ class BaseNet(nn.Module):
         
         if hp_scheduler is not None:
             for hp_name, scheduler in hp_scheduler.items():
+                assert hp_name not in kwargs.keys(), '%s in kwargs.keys()' % hp_name
                 kwargs[hp_name] = scheduler(0)
         
         params = self._filter_requires_grad(params)
@@ -189,7 +199,7 @@ class BaseNet(nn.Module):
     # --
     # Epoch steps
     
-    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=True):
+    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=False):
         loader = dataloaders[mode]
         if loader is None:
             return None
@@ -205,8 +215,11 @@ class BaseNet(nn.Module):
             if hasattr(self, 'reset'):
                 self.reset()
             
-            correct, total, loss_hist = 0, 0, [None] * len(loader)
+            correct, total, loss_hist = 0, 0, [None] * min(num_batches, len(loader))
             for batch_idx, (data, target) in gen:
+                if batch_idx >= num_batches:
+                    break
+                
                 if set_progress:
                     self.set_progress(self.epoch + batch_idx / len(loader))
                 
@@ -217,14 +230,17 @@ class BaseNet(nn.Module):
                     correct += metrics[0]
                     total   += target.shape[0]
                 
-                if batch_idx > num_batches:
-                    break
-                
                 if self.verbose:
                     gen.set_postfix(**{
                         "acc"  : correct / total if compute_acc else -1.0,
                         "loss" : loss,
                     })
+            
+            if self.verbose:
+                gen.set_postfix(**{
+                    "acc"          : correct / total if compute_acc else -1.0,
+                    "last_10_loss" : np.mean(loss_hist[-10:]),
+                })
             
             if set_progress:
                 self.epoch += 1
