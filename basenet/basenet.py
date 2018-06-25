@@ -8,6 +8,7 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 from tqdm import tqdm
+from copy import deepcopy
 import warnings
 
 import torch
@@ -89,6 +90,13 @@ class BaseNet(nn.Module):
                 raise Exception
         
         return self
+    
+    def deepcopy(self):
+        _device = self.device
+        del self.device
+        new_self = deepcopy(self).to(_device)
+        self.device = _device
+        return new_self
     
     # --
     # Optimization

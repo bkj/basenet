@@ -226,7 +226,7 @@ class HPFind(object):
         if model.verbose:
             print('HPFind.find: copying model')
         
-        model = copy.deepcopy(model)
+        model = model.deepcopy()
         
         if hp_mults is not None:
             hp_init *= hp_mults
@@ -275,7 +275,7 @@ class HPFind(object):
             if loss > np.min(loss_hist) * 4:
                 break
         
-        return np.vstack(hp_hist), loss_hist
+        return np.vstack(hp_hist[:-1]), loss_hist[:-1]
     
     @staticmethod
     def get_optimal_hp(hp_hist, loss_hist, c=10, burnin=5):
