@@ -232,7 +232,7 @@ class HPFind(object):
             hp_init *= hp_mults
             hp_max *= hp_mults # Correct?
         
-        hp_scheduler = HPFind.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
+        hp_scheduler = HPSchedule.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
         
         if params is None:
             params = model.parameters()
@@ -240,8 +240,10 @@ class HPFind(object):
         model.init_optimizer(
             opt=torch.optim.SGD,
             params=params,
-            hp_scheduler=hp_scheduler,
-            momentum=0.9
+            hp_scheduler={
+                "lr" : hp_scheduler
+            },
+            momentum=0.9,
         )
         
         # --
