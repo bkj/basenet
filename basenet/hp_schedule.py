@@ -272,6 +272,11 @@ class HPFind(object):
             else:
                 loss_hist.append(loss)
             
+            if model.verbose:
+                gen.set_postfix(**{
+                    "loss" : loss,
+                })
+            
             hp_hist.append(model.hp['lr'])
             
             if loss > np.min(loss_hist) * 4:
