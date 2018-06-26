@@ -1,0 +1,16 @@
+python cifar_additive_cosine.py --ac-m 0.156729 --ac-s 24.539718 > results/seed_456/m0.156729-s24.539718.jl
+python cifar_additive_cosine.py --ac-m 0.144668 --ac-s 20.553918 > results/seed_456/m0.144668-s20.553918.jl
+python cifar_additive_cosine.py --ac-m 0.177140 --ac-s 22.915231 > results/seed_456/m0.177140-s22.915231.jl
+python cifar_additive_cosine.py --ac-m 0.036183 --ac-s 9.423853 > results/seed_456/m0.036183-s9.423853.jl
+python cifar_additive_cosine.py --ac-m 0.040042 --ac-s 9.641562 > results/seed_456/m0.040042-s9.641562.jl
+python cifar_additive_cosine.py --ac-m 0.049751 --ac-s 10.029193 > results/seed_456/m0.049751-s10.029193.jl
+python cifar_additive_cosine.py --ac-m 0.072014 --ac-s 9.795258 > results/seed_456/m0.072014-s9.795258.jl
+python cifar_additive_cosine.py --ac-m 0.087136 --ac-s 13.647314 > results/seed_456/m0.087136-s13.647314.jl
+python cifar_additive_cosine.py --ac-m 0.036221 --ac-s 9.851467 > results/seed_456/m0.036221-s9.851467.jl
+python cifar_additive_cosine.py --ac-m 0.048547 --ac-s 8.091274 > results/seed_456/m0.048547-s8.091274.jl
+python cifar_additive_cosine.py --ac-m 0.108545 --ac-s 26.249297 > results/seed_456/m0.108545-s26.249297.jl
+python cifar_additive_cosine.py --ac-m 0.137319 --ac-s 15.322800 > results/seed_456/m0.137319-s15.322800.jl
+python cifar_additive_cosine.py --ac-m 0.114000 --ac-s 19.581265 > results/seed_456/m0.114000-s19.581265.jl
+python cifar_additive_cosine.py --ac-m 0.115142 --ac-s 9.795923 > results/seed_456/m0.115142-s9.795923.jl
+python cifar_additive_cosine.py --ac-m 0.125126 --ac-s 18.484284 > results/seed_456/m0.125126-s18.484284.jl
+python cifar_additive_cosine.py --ac-m 0.042719 --ac-s 30.831033 > results/seed_456/m0.042719-s30.831033.jl
