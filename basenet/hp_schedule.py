@@ -200,16 +200,22 @@ class HPSchedule(object):
         
         return f
         
-    # @staticmethod
-    # def cat_schedule(fns, breaks):
-    #     def f(progress):
-    #         assert isinstance(progress, float), "not isinstance(progress, float)"
-            
-    #         for i,b in list(enumerate(breaks))[::-1]:
-    #             if progress > b:
-    #                 return fns[i](progress)
+    @staticmethod
+    def cat_schedule(fns, breaks):
+        assert len(fns) - 1 == len(breaks)
         
-    #     return f
+        def f(progress):
+            
+            if progress < breaks[0]:
+                return fns[0](progress)
+            
+            for i in range(1, len(breaks)):
+                if progress < breaks[i]:
+                    return fns[i-1](progress)
+            
+            return fns[-1](progress)
+        
+        return f
 
 # --
 # HP Finder
@@ -224,10 +230,9 @@ class HPFind(object):
         # Setup HP schedule
         
         if model.verbose:
-            print('HPFind.find: copying model', file=sys.stderr)
+            print('HPFind.find: copying model')
         
-        model = model.deepcopy()
-        _ = model.train()
+        model = copy.deepcopy(model)
         
         if hp_mults is not None:
             hp_init *= hp_mults
@@ -241,10 +246,8 @@ class HPFind(object):
         model.init_optimizer(
             opt=torch.optim.SGD,
             params=params,
-            hp_scheduler={
-                "lr" : hp_scheduler
-            },
-            momentum=0.9,
+            hp_scheduler=hp_scheduler,
+            momentum=0.9
         )
         
         # --
@@ -263,8 +266,7 @@ class HPFind(object):
             
             model.set_progress(batch_idx)
             
-            loss, _ = model.train_batch(data, target)
-            
+            _, loss = model.train_batch(data, target)
             if smooth_loss:
                 avg_loss    = avg_loss * avg_mom + loss * (1 - avg_mom)
                 debias_loss = avg_loss / (1 - avg_mom ** (batch_idx + 1))
@@ -272,12 +274,12 @@ class HPFind(object):
             else:
                 loss_hist.append(loss)
             
-            hp_hist.append(model.hp['lr'])
+            hp_hist.append(model.hp)
             
             if loss > np.min(loss_hist) * 4:
                 break
         
-        return np.vstack(hp_hist[:-1]), loss_hist[:-1]
+        return np.vstack(hp_hist), loss_hist
     
     @staticmethod
     def get_optimal_hp(hp_hist, loss_hist, c=10, burnin=5):
@@ -351,6 +353,18 @@ if __name__ == "__main__":
     #     HPSchedule.stepify(HPSchedule.linear(epochs=30, hp_max=0.1)),
     #     HPSchedule.linear(epochs=1, hp_max=1),
     # ])
+    # hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
+    # _ = plt.plot(hps)
+    # show_plot()
+    
+    # Product
+    # hp = HPSchedule.cat_schedule([
+    #     HPSchedule.prod_schedule([
+    #         HPSchedule.linear(epochs=30, hp_max=0.1),
+    #         HPSchedule.linear(epochs=1, hp_max=1),
+    #     ]),
+    #     HPSchedule.linear(epochs=30, hp_max=0.1),
+    # ], breaks=[15])
     # hps = np.vstack([hp(i) for i in np.arange(0, 30, 0.01)])
     # _ = plt.plot(hps)
     # show_plot()

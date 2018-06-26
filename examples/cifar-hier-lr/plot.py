@@ -29,6 +29,7 @@ df['lr']    = df.path.apply(lambda x: float(x.split('_')[1].split('.')[0]))
 
 # >>
 df = df[df.lr == 0.1]
+df = df[df.macro.isin(['hybrid', 'linear'])]
 # <<
 
 clookup = {
@@ -36,6 +37,7 @@ clookup = {
     "constant" : "green",
     "linear"   : "blue",
     "cosine"   : "red",
+    "hybrid"   : "black",
 }
 
 _ = df.groupby(['micro', 'macro']).apply(

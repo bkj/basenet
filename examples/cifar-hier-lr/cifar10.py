@@ -177,7 +177,7 @@ print('cifar10.py: initializing model...', file=sys.stderr)
 
 cuda = torch.device('cuda')
 model = ResNet18().to(cuda).half()
-model.verbose = False
+model.verbose = True
 print(model, file=sys.stderr)
 
 # --
@@ -206,6 +206,17 @@ lr_scheduler = HPSchedule.prod_schedule([
     micro[args.lr_micro_schedule],
 ])
 
+# # >>
+# # Hybrid schedule
+# lr_scheduler = HPSchedule.cat_schedule([
+#     HPSchedule.prod_schedule([
+#         HPSchedule.linear(epochs=args.epochs, hp_max=args.lr_max),
+#         HPSchedule.linear(epochs=micro_epochs, hp_max=1),
+#     ]),
+#     HPSchedule.linear(epochs=args.epochs, hp_max=args.lr_max),
+# ], breaks=[args.epochs // 2])
+# # <<
+
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=model.parameters(),
@@ -221,8 +232,8 @@ model.init_optimizer(
 print('cifar10.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
+    train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
+    test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
