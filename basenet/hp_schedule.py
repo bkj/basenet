@@ -244,7 +244,7 @@ class HPFind(object):
         hp_scheduler = HPSchedule.exponential_increase(hp_init=hp_init, hp_max=hp_max, num_steps=len(dataloaders[mode]))
         
         if params is None:
-            params = model.parameters()
+            params = filter(lambda x: x.requires_grad, model.parameters())
         
         model.init_optimizer(
             opt=torch.optim.SGD,
