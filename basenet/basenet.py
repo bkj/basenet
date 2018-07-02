@@ -56,7 +56,7 @@ class Metrics:
             target = target[0]
         
         correct = (output.max(dim=-1)[1] == target).long().sum()
-        return int(correct)
+        return int(correct), int(target.shape[0])
 
 # --
 # Model
@@ -151,9 +151,11 @@ class BaseNet(nn.Module):
     # --
     # Batch steps
     
-    def train_batch(self, data, target, metric_fns=None):
+    def train_batch(self, data, target, metric_fns=None, forward=None):
         assert self.loss_fn is not None, 'BaseNet: self.loss_fn is None'
         assert self.training, 'BaseNet: self.training == False'
+        if forward is None:
+            forward = self.forward
         
         self.opt.zero_grad()
         
@@ -162,7 +164,7 @@ class BaseNet(nn.Module):
         
         data, target = _to_device(data, self.device), _to_device(target, self.device)
         
-        output = self(data)
+        output = forward(data)
         loss = self.loss_fn(output, target)
         loss.backward()
         
@@ -177,13 +179,15 @@ class BaseNet(nn.Module):
         metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
         return float(loss), metrics
     
-    def eval_batch(self, data, target, metric_fns=None):
+    def eval_batch(self, data, target, metric_fns=None, forward=None):
         assert not self.training, 'BaseNet: self.training == True'
+        if forward is None:
+            forward = self.forward
         
         def _eval(data, target, metric_fns):
             data, target = _to_device(data, self.device), _to_device(target, self.device)
             
-            output = self(data)
+            output = forward(data)
             loss = self.loss_fn(output, target)
             
             metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
@@ -227,8 +231,8 @@ class BaseNet(nn.Module):
                 
                 loss_hist[batch_idx] = loss
                 if compute_acc:
-                    correct += metrics[0]
-                    total   += target.shape[0]
+                    correct += metrics[0][0]
+                    total   += metrics[0][1]
                 
                 if self.verbose:
                     gen.set_postfix(**{
