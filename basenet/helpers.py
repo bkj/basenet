@@ -26,6 +26,21 @@ def set_seeds(seed=100):
     _ = random.seed(seed + 789)
 
 
+def to_device(x, device):
+    if TORCH_VERSION_4:
+        if isinstance(x, tuple) or isinstance(x, list):
+            return [xx.to(device) for xx in x]
+        else:
+            return x.to(device)
+    else:
+        if device == 'cuda':
+            return x.cuda()
+        elif device == 'cpu':
+            return x.cpu()
+        else:
+            raise Exception
+
+
 if TORCH_VERSION_4:
     def to_numpy(x):
         if type(x) in [list, tuple]:

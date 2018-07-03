@@ -17,7 +17,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.autograd import Variable
 
-from .helpers import to_numpy
+from .helpers import to_numpy, to_device
 from .hp_schedule import HPSchedule
 
 TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
@@ -33,19 +33,6 @@ def _set_train(x, mode):
     
     return x
 
-def _to_device(x, device):
-    if TORCH_VERSION_4:
-        if isinstance(x, tuple) or isinstance(x, list):
-            return [xx.to(device) for xx in x]
-        else:
-            return x.to(device)
-    else:
-        if device == 'cuda':
-            return x.cuda()
-        elif device == 'cpu':
-            return x.cpu()
-        else:
-            raise Exception
 
 class Metrics:
     @staticmethod
@@ -93,6 +80,7 @@ class BaseNet(nn.Module):
         return self
     
     def deepcopy(self):
+        warnings.warn("BaseNet.deepcopy does not copy the optimizer!", RuntimeWarning)
         _device = self.device
         del self.device
         new_self = deepcopy(self).to(_device)
@@ -131,6 +119,7 @@ class BaseNet(nn.Module):
         params = self._filter_requires_grad(params)
         
         self.opt = opt(params, **kwargs)
+        self.params = params
         self.set_progress(0)
     
     def set_progress(self, progress):
@@ -162,7 +151,7 @@ class BaseNet(nn.Module):
         if not TORCH_VERSION_4:
             data, target = Variable(data), Variable(target)
         
-        data, target = _to_device(data, self.device), _to_device(target, self.device)
+        data, target = to_device(data, self.device), to_device(target, self.device)
         
         output = forward(data)
         loss = self.loss_fn(output, target)
@@ -170,9 +159,9 @@ class BaseNet(nn.Module):
         
         if self.clip_grad_norm > 0:
             if TORCH_VERSION_4:
-                torch.nn.utils.clip_grad_norm_(self.parameters(), self.clip_grad_norm)
+                grad_norm = torch.nn.utils.clip_grad_norm_(self.params, self.clip_grad_norm)
             else:
-                torch.nn.utils.clip_grad_norm(self.parameters(), self.clip_grad_norm)
+                grad_norm = torch.nn.utils.clip_grad_norm(self.params, self.clip_grad_norm)
         
         self.opt.step()
         
@@ -185,7 +174,7 @@ class BaseNet(nn.Module):
             forward = self.forward
         
         def _eval(data, target, metric_fns):
-            data, target = _to_device(data, self.device), _to_device(target, self.device)
+            data, target = to_device(data, self.device), to_device(target, self.device)
             
             output = forward(data)
             loss = self.loss_fn(output, target)
@@ -296,10 +285,10 @@ class BaseNet(nn.Module):
             for _, (data, target) in gen:
                 if TORCH_VERSION_4:
                     with torch.no_grad():
-                        output = self(_to_device(data, self.device)).cpu()
+                        output = self(to_device(data, self.device)).cpu()
                 else:
                     data = Variable(data, volatile=True)
-                    output = self(_to_device(data, self.device)).cpu()
+                    output = self(to_device(data, self.device)).cpu()
                 
                 all_output.append(output)
                 all_target.append(target)
