@@ -80,7 +80,6 @@ class BaseNet(nn.Module):
         return self
     
     def deepcopy(self):
-        warnings.warn("BaseNet.deepcopy does not copy the optimizer!", RuntimeWarning)
         _device = self.device
         del self.device
         new_self = deepcopy(self).to(_device)
@@ -116,10 +115,8 @@ class BaseNet(nn.Module):
                 assert hp_name not in kwargs.keys(), '%s in kwargs.keys()' % hp_name
                 kwargs[hp_name] = scheduler(0)
         
-        params = self._filter_requires_grad(params)
-        
-        self.opt = opt(params, **kwargs)
-        self.params = params
+        self.params = self._filter_requires_grad(params)
+        self.opt = opt(self.params, **kwargs)
         self.set_progress(0)
     
     def set_progress(self, progress):
