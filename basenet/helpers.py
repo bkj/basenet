@@ -27,6 +27,7 @@ def set_seeds(seed=100):
 
 
 def to_device(x, device):
+    assert device is not None, "basenet.helpers.to_device: device is None"
     if TORCH_VERSION_4:
         if isinstance(x, tuple) or isinstance(x, list):
             return [xx.to(device) for xx in x]
