@@ -89,7 +89,10 @@ dataloaders = {
 }
 
 n_classes = int(y_train.max()) + 1
+
 r = np.column_stack([calc_r(i, X_train, y_train) for i in range(n_classes)])
+r = np.vstack([[0.0] * n_classes, r])
+r = torch.FloatTensor(r[:,0]).cuda()
 
 # --
 # Model definition
@@ -100,21 +103,28 @@ class DotProdNB(BaseNet):
         super().__init__()
         
         # Init w
-        self.w = nn.Embedding(vocab_size + 1, 1, padding_idx=0)
-        self.w.weight.data.uniform_(-0.1, 0.1)
-        self.w.weight.data[0] = 0
+        self.w_weight    = torch.zeros(vocab_size + 1, 1).uniform_(-0.1, 0.1)
+        self.w_weight[0] = 0
+        self.w_weight    = nn.Parameter(self.w_weight)
         
-        # Init r
-        self.r = nn.Embedding(vocab_size + 1, n_classes)
-        self.r.weight.data = torch.Tensor(np.concatenate([np.zeros((1, n_classes)), r])).to(torch.device('cuda'))
-        self.r.weight.requires_grad = False
+        self.r_weight = torch.stack([r, -r], dim=1)
         
         self.w_adj = w_adj
         self.r_adj = r_adj
         
     def forward(self, feat_idx):
-        w = self.w(feat_idx) + self.w_adj
-        r = self.r(feat_idx)
+        n_docs, n_words = feat_idx.shape
+        
+        feat_idx  = feat_idx.view(-1)
+        zero_mask = (feat_idx == 0)
+        
+        w = (self.w_weight[feat_idx] + self.w_adj)
+        w[zero_mask] = 0
+        w = w.view(n_docs, n_words, self.w_weight.shape[1])
+        
+        r = self.r_weight[feat_idx]
+        r[zero_mask] = 0
+        r = r.view(n_docs, n_words, self.r_weight.shape[1])
         
         x = (w * r).sum(dim=1)
         x =  x / self.r_adj
@@ -132,12 +142,14 @@ print(model, file=sys.stderr)
 # --
 # Initializing optimizer 
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
+lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=0.5)
 model.init_optimizer(
-    opt=torch.optim.Adam,
+    opt=torch.optim.SGD,
     params=[p for p in model.parameters() if p.requires_grad],
-    hp_scheduler={"lr" : lr_scheduler},
-    weight_decay=args.weight_decay,
+    hp_scheduler={
+        "lr" : lr_scheduler
+    },
+    momentum=0.99,
 )
 
 # --
@@ -146,8 +158,8 @@ model.init_optimizer(
 print('nbsgd.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
+    train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
+    test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
