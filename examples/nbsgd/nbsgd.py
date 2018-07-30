@@ -100,17 +100,28 @@ r = torch.FloatTensor(r).cuda()
 class DotProdNB(BaseNet):
     def __init__(self, vocab_size, n_classes, r, w_adj=0.4, r_adj=10):
         
+        # def loss_fn(x, y):
+        #     return F.binary_cross_entropy(F.sigmoid(2 * x), y.float())
+        
         def loss_fn(x, y):
-            return F.binary_cross_entropy(F.sigmoid(2 * x), y.float())
+            x = 2 * x
+            y = y.float()
+            return (F.softplus(-x.abs()) + x * ((x > 0).float() - y)).mean()
         
         super().__init__(loss_fn=loss_fn)
         
         # Init w
-        self.w_weight    = torch.zeros(vocab_size + 1).uniform_(-0.1, 0.1)
+        scale = 0.1
+        self.w_weight    = torch.zeros(vocab_size + 1).uniform_(-scale, scale)
         self.w_weight[0] = 0
         self.w_weight    = nn.Parameter(self.w_weight)
         
-        self.r_weight = r
+        # >>
+        self.r_weight = nn.Parameter(r)
+        # --
+        # Naive weights
+        # self.r_weight = r.zero_() + 1
+        # <<
         
         self.w_adj = w_adj
         self.r_adj = r_adj
@@ -144,6 +155,7 @@ model.verbose = True
 
 X, y = next(iter(dataloaders['train']))
 X, y = X.cuda(), y.cuda()
+x = model(X)
 
 # --
 # Initializing optimizer 
@@ -155,12 +167,12 @@ X, y = X.cuda(), y.cuda()
 #     hp_scheduler={
 #         "lr" : lr_scheduler
 #     },
-#     momentum=0.99,
+#     momentum=0.9,
 # )
 
-lr_scheduler = HPSchedule.constant(hp_max=0.02)
+lr_scheduler = HPSchedule.constant(hp_max=0.03)
 model.init_optimizer(
-    opt=torch.optim.Adam,
+    opt=torch.optim.Adagrad,
     params=[p for p in model.parameters() if p.requires_grad],
     hp_scheduler={
         "lr" : lr_scheduler
@@ -172,7 +184,7 @@ model.init_optimizer(
 
 print('nbsgd.py: training...', file=sys.stderr)
 t = time()
-for epoch in range(1):
+for epoch in range(args.epochs):
     train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
     test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
