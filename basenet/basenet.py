@@ -42,7 +42,11 @@ class Metrics:
         if isinstance(target, tuple) or isinstance(output, list):
             target = target[0]
         
-        correct = (output.max(dim=-1)[1] == target).long().sum()
+        if len(output.shape) == 2:
+            correct = (output.max(dim=-1)[1] == target).long().sum()
+        else:
+            correct = ((output > 0).long() == target).long().sum()
+        
         return int(correct), int(target.shape[0])
 
 # --

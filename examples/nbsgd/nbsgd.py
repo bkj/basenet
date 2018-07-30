@@ -86,11 +86,11 @@ dataloaders = {
     "test"  : torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False),
 }
 
-n_classes = int(y_train.max()) + 1
+n_classes = 2
 
 r = np.column_stack([calc_r(i, X_train, y_train) for i in range(n_classes)])
 r = np.vstack([[0.0] * n_classes, r])
-r = r[:,0]
+r = r[:,1]
 # r = np.random.normal(0, 1e-1, r.shape)
 r = torch.FloatTensor(r).cuda()
 
@@ -100,14 +100,17 @@ r = torch.FloatTensor(r).cuda()
 class DotProdNB(BaseNet):
     def __init__(self, vocab_size, n_classes, r, w_adj=0.4, r_adj=10):
         
-        super().__init__()
+        def loss_fn(x, y):
+            return F.binary_cross_entropy(F.sigmoid(2 * x), y.float())
+        
+        super().__init__(loss_fn=loss_fn)
         
         # Init w
-        self.w_weight    = torch.zeros(vocab_size + 1, 1).uniform_(-0.1, 0.1)
+        self.w_weight    = torch.zeros(vocab_size + 1).uniform_(-0.1, 0.1)
         self.w_weight[0] = 0
         self.w_weight    = nn.Parameter(self.w_weight)
         
-        self.r_weight = torch.stack([r, -r], dim=1)
+        self.r_weight = r
         
         self.w_adj = w_adj
         self.r_adj = r_adj
@@ -120,14 +123,15 @@ class DotProdNB(BaseNet):
         
         w = (self.w_weight[feat_idx] + self.w_adj)
         w[zero_mask] = 0
-        w = w.view(n_docs, n_words, self.w_weight.shape[1])
+        w = w.view(n_docs, n_words)
         
         r = self.r_weight[feat_idx]
         r[zero_mask] = 0
-        r = r.view(n_docs, n_words, self.r_weight.shape[1])
+        r = r.view(n_docs, n_words)
         
         x = (w * r).sum(dim=1)
         x =  x / self.r_adj
+        
         return x
 
 # --
@@ -137,19 +141,30 @@ print('nbsgd.py: initializing model...', file=sys.stderr)
 
 model = DotProdNB(args.vocab_size, n_classes, r).to(torch.device('cuda'))
 model.verbose = True
-print(model, file=sys.stderr)
+
+X, y = next(iter(dataloaders['train']))
+X, y = X.cuda(), y.cuda()
 
 # --
 # Initializing optimizer 
 
-lr_scheduler = HPSchedule.constant(hp_max=0.5)
+# lr_scheduler = HPSchedule.constant(hp_max=args.lr_max)
+# model.init_optimizer(
+#     opt=torch.optim.SGD,
+#     params=[p for p in model.parameters() if p.requires_grad],
+#     hp_scheduler={
+#         "lr" : lr_scheduler
+#     },
+#     momentum=0.99,
+# )
+
+lr_scheduler = HPSchedule.constant(hp_max=0.02)
 model.init_optimizer(
-    opt=torch.optim.SGD,
+    opt=torch.optim.Adam,
     params=[p for p in model.parameters() if p.requires_grad],
     hp_scheduler={
         "lr" : lr_scheduler
-    },
-    momentum=0.99,
+    }
 )
 
 # --
@@ -157,7 +172,7 @@ model.init_optimizer(
 
 print('nbsgd.py: training...', file=sys.stderr)
 t = time()
-for epoch in range(args.epochs):
+for epoch in range(1):
     train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
     test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
@@ -169,3 +184,4 @@ for epoch in range(args.epochs):
     sys.stdout.flush()
 
 model.save('weights')
+
