@@ -190,7 +190,16 @@ class BaseNet(nn.Module):
     # --
     # Epoch steps
     
-    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=False):
+    def _run_epoch(self, dataloaders, mode, batch_fn, set_progress, desc, num_batches=np.inf, compute_acc=False, metric_fns=None):
+        warnings.warn((
+            'BaseNet._run_epoch: use `metric_fns=["n_correct"]` instead of `compute_acc=True`'
+        ), RuntimeWarning)
+        
+        metric_fns = metric_fns if metric_fns is not None else []
+        if compute_acc:
+            metric_fns.append('n_correct')
+        metric_fns = [getattr(Metrics, m) for m in metric_fns]
+        
         loader = dataloaders[mode]
         if loader is None:
             return None
@@ -198,10 +207,6 @@ class BaseNet(nn.Module):
             gen = enumerate(loader)
             if self.verbose:
                 gen = tqdm(gen, total=len(loader), desc='%s:%s' % (desc, mode))
-            
-            metric_fns = []
-            if compute_acc:
-                metric_fns = [Metrics.n_correct]
             
             if hasattr(self, 'reset'):
                 self.reset()

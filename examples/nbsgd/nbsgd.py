@@ -146,8 +146,8 @@ model.init_optimizer(
 print('nbsgd.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
+    train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
+    test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
