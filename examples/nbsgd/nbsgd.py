@@ -46,9 +46,7 @@ def parse_args():
     parser.add_argument('--y-test', type=str, default='./data/aclImdb/y_test.npy')
     
     parser.add_argument('--epochs', type=int, default=4)
-    parser.add_argument('--lr-schedule', type=str, default='constant')
-    parser.add_argument('--lr-max', type=float, default=0.02)
-    parser.add_argument('--weight-decay', type=float, default=1e-6)
+    parser.add_argument('--lr-max', type=float, default=0.5)
     parser.add_argument('--batch-size', type=int, default=256)
     
     parser.add_argument('--vocab-size', type=int, default=200000)
@@ -92,7 +90,9 @@ n_classes = int(y_train.max()) + 1
 
 r = np.column_stack([calc_r(i, X_train, y_train) for i in range(n_classes)])
 r = np.vstack([[0.0] * n_classes, r])
-r = torch.FloatTensor(r[:,0]).cuda()
+r = r[:,0]
+# r = np.random.normal(0, 1e-1, r.shape)
+r = torch.FloatTensor(r).cuda()
 
 # --
 # Model definition
@@ -142,7 +142,7 @@ print(model, file=sys.stderr)
 # --
 # Initializing optimizer 
 
-lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=0.5)
+lr_scheduler = HPSchedule.constant(hp_max=0.5)
 model.init_optimizer(
     opt=torch.optim.SGD,
     params=[p for p in model.parameters() if p.requires_grad],
