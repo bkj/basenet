@@ -30,10 +30,12 @@ from torchvision import transforms, datasets
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--run', type=str, required=True)
+    
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--extra', type=int, default=5)
     parser.add_argument('--burnout', type=int, default=5)
-    parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
+    parser.add_argument('--lr-schedule', type=str, default='one_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
@@ -104,9 +106,9 @@ class PreActBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
         
-        self.bn1   = nn.BatchNorm2d(in_channels)
+        # self.bn1   = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2   = nn.BatchNorm2d(out_channels)
+        # self.bn2   = nn.BatchNorm2d(out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
         
         if stride != 1 or in_channels != out_channels:
@@ -115,10 +117,10 @@ class PreActBlock(nn.Module):
             )
             
     def forward(self, x):
-        out = F.relu(self.bn1(x))
+        out = F.relu(x)
         shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
         out = self.conv1(out)
-        out = self.conv2(F.relu(self.bn2(out)))
+        out = self.conv2(F.relu(out))
         return out + shortcut
 
 
@@ -130,7 +132,7 @@ class ResNet18(BaseNet):
         
         self.prep = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            # nn.BatchNorm2d(64),
             nn.ReLU()
         )
         
@@ -211,9 +213,10 @@ model.init_optimizer(
 
 print('cifar10.py: training...', file=sys.stderr)
 t = time()
-for epoch in range(args.epochs + args.extra + args.burnout):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
+for epoch in range(args.epochs):
+    model.save('weights/weights.%s.e%d' % (args.run, epoch))
+    train = model.train_epoch(dataloaders, mode='train', compute_acc=True)
+    test  = model.eval_epoch(dataloaders, mode='test', compute_acc=True)
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
@@ -223,4 +226,4 @@ for epoch in range(args.epochs + args.extra + args.burnout):
     }))
     sys.stdout.flush()
 
-model.save('weights')
+model.save('weights/weights.%s.e%d' % (args.run, args.epochs))
