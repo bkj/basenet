@@ -31,8 +31,8 @@ from torchvision import transforms, datasets
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--extra', type=int, default=5)
-    parser.add_argument('--burnout', type=int, default=5)
+    parser.add_argument('--extra', type=int, default=0)
+    parser.add_argument('--burnout', type=int, default=0)
     parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
@@ -212,8 +212,8 @@ model.init_optimizer(
 print('cifar10.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs + args.extra + args.burnout):
-    train = model.train_epoch(dataloaders, mode='train')
-    test  = model.eval_epoch(dataloaders, mode='test')
+    train = model.train_epoch(dataloaders, mode='train', metric_fns=['n_correct'])
+    test  = model.eval_epoch(dataloaders, mode='test', metric_fns=['n_correct'])
     print(json.dumps({
         "epoch"     : int(epoch),
         "lr"        : model.hp['lr'],
