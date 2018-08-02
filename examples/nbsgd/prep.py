@@ -25,7 +25,7 @@ def texts_from_folders(src, names):
         path = os.path.join(src, name)
         for fname in sorted(os.listdir(path)):
             fpath = os.path.join(path, fname)
-            texts.append(open(fpath).read())
+            texts.append(open(fpath, 'rb').read())
             labels.append(idx)
     
     return texts,np.array(labels)
