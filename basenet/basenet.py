@@ -34,6 +34,15 @@ def _set_train(x, mode):
     return x
 
 
+def _clip_grad_norm(params, clip_grad_norm):
+    clip_fn = torch.nn.utils.clip_grad_norm_ if TORCH_VERSION_4 else torch.nn.utils.clip_grad_norm
+    for p in params:
+        if isinstance(p, dict):
+            clip_fn(p['params'], clip_grad_norm)
+        else:
+            clip_fn(p, clip_grad_norm)
+
+
 class Metrics:
     @staticmethod
     def n_correct(output, target):
@@ -156,10 +165,7 @@ class BaseNet(nn.Module):
         loss.backward()
         
         if self.clip_grad_norm > 0:
-            if TORCH_VERSION_4:
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.params, self.clip_grad_norm)
-            else:
-                grad_norm = torch.nn.utils.clip_grad_norm(self.params, self.clip_grad_norm)
+            _clip_grad_norm(self.params, self.clip_grad_norm)
         
         self.opt.step()
         
