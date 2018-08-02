@@ -198,8 +198,8 @@ class BaseNet(nn.Module):
             ), RuntimeWarning)
             metric_fns.append('n_correct')
         
+        compute_acc = 'n_correct' in metric_fns
         metric_fns = [getattr(Metrics, m) for m in metric_fns]
-        print(metric_fns)
         
         loader = dataloaders[mode]
         if loader is None:
