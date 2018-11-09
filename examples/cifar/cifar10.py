@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--extra', type=int, default=0)
     parser.add_argument('--burnout', type=int, default=0)
-    parser.add_argument('--lr-schedule', type=str, default='linear_cycle')
+    parser.add_argument('--lr-schedule', type=str, default='one_cycle')
     parser.add_argument('--lr-max', type=float, default=0.1)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.9)

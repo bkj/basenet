@@ -15,12 +15,12 @@ source activate basenet4_env
 
 pip install -r requirements.txt
 conda install -y pytorch torchvision cuda90 -c pytorch
-python setup.py install
+pip install -e .
 ```
 
 #### Examples
 
 ```
 cd examples/cifar
-./cifar10.sh
+./run.sh
 ```
