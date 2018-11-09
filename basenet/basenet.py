@@ -294,16 +294,17 @@ class BaseNet(nn.Module):
             
             for _, (data, target) in gen:
                 if TORCH_VERSION_4:
-                    with torch.no_grad():
-                        output = self(to_device(data, self.device)).cpu()
+                    pass
+                    # with torch.no_grad():
+                    #     output = self(to_device(data, self.device)).cpu()
                 else:
                     data = Variable(data, volatile=True)
                     output = self(to_device(data, self.device)).cpu()
                 
-                all_output.append(output)
-                all_target.append(target)
+                # all_output.append(output)
+                # all_target.append(target)
         
-        return torch.cat(all_output), torch.cat(all_target)
+        # return torch.cat(all_output), torch.cat(all_target)
     
     def save(self, outpath):
         torch.save(self.state_dict(), outpath)
