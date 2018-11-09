@@ -67,19 +67,19 @@ try:
 except:
     raise Exception('cifar10.py: error loading data -- try rerunning w/ `--download` flag')
 
-# >>
-print('prepping data', file=sys.stderr)
-X_train, y_train = zip(*raw_trainset)
-X_test, y_test   = zip(*raw_testset)
+# # >>
+# print('prepping data', file=sys.stderr)
+# X_train, y_train = zip(*raw_trainset)
+# X_test, y_test   = zip(*raw_testset)
 
-X_train, X_test = torch.stack(X_train), torch.stack(X_test)
-y_train, y_test = torch.LongTensor(y_train), torch.LongTensor(y_test)
+# X_train, X_test = torch.stack(X_train), torch.stack(X_test)
+# y_train, y_test = torch.LongTensor(y_train), torch.LongTensor(y_test)
 
-# X_train, X_test, y_train, y_test = X_train.cuda(), X_test.cuda(), y_train.cuda(), y_test.cuda()
+# # X_train, X_test, y_train, y_test = X_train.cuda(), X_test.cuda(), y_train.cuda(), y_test.cuda()
 
-trainset = torch.utils.data.TensorDataset(X_train, y_train)
-testset  = torch.utils.data.TensorDataset(X_test, y_test)
-# <<
+# trainset = torch.utils.data.TensorDataset(X_train, y_train)
+# testset  = torch.utils.data.TensorDataset(X_test, y_test)
+# # <<
 
 
 trainloader = torch.utils.data.DataLoader(
