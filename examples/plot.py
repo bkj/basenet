@@ -19,12 +19,20 @@ def smart_json_loads(x):
 colors = pl.cm.jet(np.linspace(0,1,101))
 
 all_data = []
+final_accs = []
+ps = []
 for p in sys.argv[1:]:
     data = list(filter(None, map(smart_json_loads, open(p))))
     
     acc   = [d['test_acc'] for d in data]
     epoch = [d['epoch'] for d in data]
     _ = plt.plot(acc, alpha=0.75, label=p)
+    
+    # >>
+    final_accs.append(acc[-1])
+    prob = '.'.join(p.split('-')[-1][1:].split('.')[:2])
+    ps.append(float(prob))
+    # <<
 
 
 _ = plt.legend(loc='lower right')
@@ -35,3 +43,7 @@ for t in np.arange(0.90, 1.0, 0.01):
 _ = plt.ylim(0.5, 1.0)
 # _ = plt.xlim(0, 40)
 show_plot()
+
+_ = plt.plot(ps, sorted(final_accs))
+show_plot()
+
