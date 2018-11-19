@@ -120,6 +120,29 @@ class DotProdNB(BaseNet):
         x =  x / self.r_adj
         return x
 
+# class DotProdNB(BaseNet):
+#     def __init__(self, vocab_size, n_classes, r, w_adj=0.4, r_adj=10):
+        
+#         def loss_fn(x, y):
+#             x_softmax = F.softmax(x, dim=-1)
+#             return F.nll_loss(x_softmax, y)
+        
+#         super().__init__(loss_fn=loss_fn)
+        
+#         # Init w
+#         emb_dim = 32
+        
+#         self.emb = nn.Embedding(vocab_size + 1, emb_dim, padding_idx=0)
+#         self.emb.weight.data.uniform_(-0.1, 0.1)
+#         self.emb.weight.data[0] = 0
+        
+#         self.linear = nn.Linear(emb_dim, 2)
+    
+#     def forward(self, x):
+#         x = self.emb(x).sum(dim=1)
+#         x = self.linear(x)
+#         return x
+
 # --
 # Define model
 

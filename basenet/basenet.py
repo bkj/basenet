@@ -160,29 +160,19 @@ class BaseNet(nn.Module):
         if not TORCH_VERSION_4:
             data, target = Variable(data), Variable(target)
         
-        # t = time()
         data, target = to_device(data, self.device), to_device(target, self.device)
-        # print('transfer', time() - t)
         
-        # t = time()
         output = forward(data)
-        # print('forward ', time() - t)
-        # t = time()
         loss = self.loss_fn(output, target)
-        # print('loss    ', time() - t)
-        # t = time()
         loss.backward()
-        # print('backward', time() - t)
         
         if self.clip_grad_norm > 0:
             _clip_grad_norm(self.params, self.clip_grad_norm)
         
-        # t = time()
         self.opt.step()
-        # print('opt     ', time() - t)
         
         metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
-        return float(loss), None # metrics
+        return float(loss), metrics
     
     def eval_batch(self, data, target, metric_fns=None, forward=None):
         assert not self.training, 'BaseNet: self.training == True'
