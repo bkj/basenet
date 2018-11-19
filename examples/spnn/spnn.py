@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-    cifar10.py
+    spnn.py
 """
 
 from __future__ import division, print_function
@@ -38,6 +38,7 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=128)
     
     parser.add_argument('--wta-p', type=float, default=1.0)
+    parser.add_argument('--wta-mode', type=str, default='per_image')
     parser.add_argument('--bn-disabled', action="store_true")
     
     parser.add_argument('--seed', type=int, default=123)
@@ -101,71 +102,98 @@ dataloaders = {
 # Derived from models in `https://github.com/kuangliu/pytorch-cifar`
 
 class WTADropout(nn.Module):
-    def __init__(self, in_channels, p):
+    def __init__(self, p, mode='per_image'):
         super().__init__()
         
-        self.p           = p
-        self.in_channels = in_channels
-        self.k           = int(np.ceil(in_channels * p)) # number of elements to keep
-    
+        self.mode = mode
+        self.p    = p
+        self.k    = 0
+        
     def forward(self, x):
-        topk = x.topk(k=self.k, dim=1)[0]
-        topk = topk[:,-1:,:,:]
-        mask = (x >= topk).float()
-        # print('mask.mean()', mask.mean(), file=sys.stderr)
-        return x * mask
-    
-    def __repr__(self):
-        return 'WTADropout(p=%f | %d -> %d)' % (self.p, self.in_channels, self.k)
-
-
-class sp_BatchNorm2d(nn.BatchNorm2d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.disabled = BN_DISABLED
-    
-    def forward(self, x):
-        if self.disabled:
-            return x
+        bs = x.shape[0]
+        nc = x.shape[1]
+        sz = x.shape[2]
+        assert x.shape[3] == sz
+        
+        # print(tuple(x.shape), file=sys.stderr)
+        
+        if self.mode == 'per_location':
+            # take largest p% of activations per location per image
+            
+            k = int(np.ceil(nc * self.p))
+            
+            topk = x.topk(k=k, dim=1)[0]
+            topk = topk[:,-1:,:,:]
+            
+        elif self.mode == 'per_channel':
+            # take largest p% of activations per channel per image
+            
+            k = int(np.ceil(sz * self.p))
+            
+            tmp  = x.view(bs, nc, -1)
+            topk = tmp.topk(k=k, dim=-1)[0]
+            topk = topk[:,:,-1:]
+            topk = topk.view(bs, nc, 1, 1)
+        elif self.mode == 'per_image':
+            # take largest p% of activations per image
+            
+            k = int(np.ceil(nc * sz * sz * self.p))
+            
+            tmp = x.view(bs, -1)
+            topk = tmp.topk(k=k, dim=-1)[0]
+            topk = topk[:,-1:]
+            topk = topk.view(bs, 1, 1, 1)
         else:
-            return super().forward(x)
+            raise NotImplemented
+        
+        x = x * (x >= topk).float()
+        
+        if self.k:
+            assert k == self.k
+        else:
+            self.k = k
+        
+        return x
     
     def __repr__(self):
-        z = super().__repr__()[:-1]
-        z += ', disabled=%d)' % self.disabled
-        return z
-
-
-class sp_Conv2d(nn.Conv2d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        return 'WTADropout(p=%f | k=%d)' % (self.p, self.k if self.k else -1)
 
 
 class PreActBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
         
-        self.bn1   = sp_BatchNorm2d(in_channels)
-        self.conv1 = sp_Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2   = sp_BatchNorm2d(out_channels)
-        self.conv2 = sp_Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1   = nn.BatchNorm2d(in_channels)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2   = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
         
-        self.wta1 = WTADropout(in_channels=out_channels, p=args.wta_p)
-        self.wta2 = WTADropout(in_channels=out_channels, p=args.wta_p)
+        self.wta1 = WTADropout(p=args.wta_p, mode=args.wta_mode)
+        self.wta2 = WTADropout(p=args.wta_p, mode=args.wta_mode)
+        
+        # self.pre_nnz  = 0
+        # self.post_nnz = 0
         
         if stride != 1 or in_channels != out_channels:
             self.shortcut = nn.Sequential(
-                sp_Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
-                WTADropout(in_channels=out_channels, p=args.wta_p), # !!
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                WTADropout(p=args.wta_p, mode=args.wta_mode), # !!
             )
-            
+    
     def forward(self, x):
         out = F.relu(self.bn1(x))
         shortcut = self.shortcut(out) if hasattr(self, 'shortcut') else x
+        
         out = self.conv1(out)
+        # self.pre_nnz += int((out != 0).sum())
         out = self.wta1(out) # !!
-        out = self.conv2(F.relu(self.bn2(out))) # !!
+        # self.post_nnz += int((out != 0).sum())
+        
+        out = self.conv2(F.relu(self.bn2(out)))
+        # self.pre_nnz += int((out != 0).sum())
         out = self.wta2(out)
+        # self.post_nnz += int((out != 0).sum())
+        
         return out + shortcut
 
 
@@ -176,8 +204,8 @@ class ResNet18(BaseNet):
         self.in_channels = 64
         
         self.prep = nn.Sequential(
-            sp_Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            sp_BatchNorm2d(64),
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU()
         )
         
@@ -232,7 +260,7 @@ elif args.lr_schedule == 'sgdr':
         t_mult=args.sgdr_t_mult,
     )
 else:
-    lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs)
+    lr_scheduler = getattr(HPSchedule, args.lr_schedule)(hp_max=args.lr_max, epochs=args.epochs + 1)
 
 model.init_optimizer(
     opt=torch.optim.SGD,
@@ -243,6 +271,9 @@ model.init_optimizer(
     nesterov=True,
 )
 
+_ = model.train_epoch(dataloaders, mode='train', num_batches=1, metric_fns=['n_correct'])
+print(model, file=sys.stderr)
+
 # --
 # Train
 
@@ -250,6 +281,7 @@ print('cifar10.py: training...', file=sys.stderr)
 t = time()
 for epoch in range(args.epochs):
     train = model.train_epoch(dataloaders, mode='train', metric_fns=['n_correct'])
+    # print([[layer.post_nnz / layer.pre_nnz for layer in layers] for layers in model.layers], file=sys.stderr)
     test  = model.eval_epoch(dataloaders, mode='test', metric_fns=['n_correct'])
     print(json.dumps({
         "epoch"     : int(epoch),

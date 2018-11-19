@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 
-TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+TORCH_VERSION_4 = float(torch.__version__[:3]) >= 0.4
 
 # --
 # Utils

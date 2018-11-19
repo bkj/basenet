@@ -6,6 +6,8 @@
 
 from __future__ import print_function, division, absolute_import
 
+from time import time
+
 import sys
 import numpy as np
 from tqdm import tqdm
@@ -20,7 +22,7 @@ from torch.autograd import Variable
 from .helpers import to_numpy, to_device
 from .hp_schedule import HPSchedule
 
-TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+TORCH_VERSION_4 = float(torch.__version__[:3]) >= 0.4
 
 # --
 # Helpers
@@ -158,19 +160,29 @@ class BaseNet(nn.Module):
         if not TORCH_VERSION_4:
             data, target = Variable(data), Variable(target)
         
+        # t = time()
         data, target = to_device(data, self.device), to_device(target, self.device)
+        # print('transfer', time() - t)
         
+        # t = time()
         output = forward(data)
+        # print('forward ', time() - t)
+        # t = time()
         loss = self.loss_fn(output, target)
+        # print('loss    ', time() - t)
+        # t = time()
         loss.backward()
+        # print('backward', time() - t)
         
         if self.clip_grad_norm > 0:
             _clip_grad_norm(self.params, self.clip_grad_norm)
         
+        # t = time()
         self.opt.step()
+        # print('opt     ', time() - t)
         
         metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
-        return float(loss), metrics
+        return float(loss), None # metrics
     
     def eval_batch(self, data, target, metric_fns=None, forward=None):
         assert not self.training, 'BaseNet: self.training == True'
@@ -276,7 +288,7 @@ class BaseNet(nn.Module):
             **kwargs,
         )
     
-    def predict(self, dataloaders, mode='val'):
+    def predict(self, dataloaders, mode='val', no_cat=False):
         _ = self.eval()
         
         all_output, all_target = [], []
@@ -303,7 +315,10 @@ class BaseNet(nn.Module):
                 all_output.append(output)
                 all_target.append(target)
         
-        return torch.cat(all_output), torch.cat(all_target)
+        if no_cat:
+            return all_output, all_target
+        else:
+            return torch.cat(all_output), torch.cat(all_target)
     
     def save(self, outpath):
         torch.save(self.state_dict(), outpath)
