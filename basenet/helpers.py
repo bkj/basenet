@@ -14,7 +14,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 
-TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+TORCH_VERSION_3  = '0.3' == torch.__version__[:3]
 
 # --
 # Utils
@@ -28,7 +28,7 @@ def set_seeds(seed=100):
 
 def to_device(x, device):
     assert device is not None, "basenet.helpers.to_device: device is None"
-    if TORCH_VERSION_4:
+    if not TORCH_VERSION_3:
         if isinstance(x, tuple) or isinstance(x, list):
             return [xx.to(device) for xx in x]
         else:
@@ -42,7 +42,7 @@ def to_device(x, device):
             raise Exception
 
 
-if TORCH_VERSION_4:
+if not TORCH_VERSION_3:
     def to_numpy(x):
         if type(x) in [list, tuple]:
             return [to_numpy(xx) for xx in x]

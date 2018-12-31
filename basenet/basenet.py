@@ -20,7 +20,7 @@ from torch.autograd import Variable
 from .helpers import to_numpy, to_device
 from .hp_schedule import HPSchedule
 
-TORCH_VERSION_4 = '0.4' == torch.__version__[:3]
+TORCH_VERSION_3 = '0.3' == torch.__version__[:3]
 
 # --
 # Helpers
@@ -35,7 +35,7 @@ def _set_train(x, mode):
 
 
 def _clip_grad_norm(params, clip_grad_norm):
-    clip_fn = torch.nn.utils.clip_grad_norm_ if TORCH_VERSION_4 else torch.nn.utils.clip_grad_norm
+    clip_fn = torch.nn.utils.clip_grad_norm_ if not TORCH_VERSION_3 else torch.nn.utils.clip_grad_norm
     for p in params:
         if isinstance(p, dict):
             clip_fn(p['params'], clip_grad_norm)
@@ -76,7 +76,7 @@ class BaseNet(nn.Module):
     
     def to(self, device=None):
         self.device = device
-        if TORCH_VERSION_4:
+        if not TORCH_VERSION_3:
             super().to(device=device)
         else:
             if device == 'cuda':
@@ -155,7 +155,7 @@ class BaseNet(nn.Module):
         
         self.opt.zero_grad()
         
-        if not TORCH_VERSION_4:
+        if TORCH_VERSION_3:
             data, target = Variable(data), Variable(target)
         
         data, target = to_device(data, self.device), to_device(target, self.device)
@@ -186,7 +186,7 @@ class BaseNet(nn.Module):
             metrics = [m(output, target) for m in metric_fns] if metric_fns is not None else []
             return float(loss), metrics
         
-        if TORCH_VERSION_4:
+        if not TORCH_VERSION_3:
             with torch.no_grad():
                 return _eval(data, target, metric_fns)
         else:
@@ -293,7 +293,7 @@ class BaseNet(nn.Module):
                 self.reset()
             
             for _, (data, target) in gen:
-                if TORCH_VERSION_4:
+                if not TORCH_VERSION_3:
                     with torch.no_grad():
                         output = self(to_device(data, self.device)).cpu()
                 else:
