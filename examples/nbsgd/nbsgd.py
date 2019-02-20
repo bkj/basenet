@@ -67,8 +67,12 @@ set_seeds(args.seed)
 print('nbsgd.py: making dataloaders...', file=sys.stderr)
 
 X_train       = np.load(args.x_train).item()
-X_train_words = np.load(args.x_train_words).item()
-y_train       = np.load(args.y_train)
+
+train_sel = np.random.choice(X_train.shape[0], 100, replace=False)
+X_train = X_train[train_sel]
+
+X_train_words = np.load(args.x_train_words).item()[train_sel]
+y_train       = np.load(args.y_train)[train_sel]
 
 X_test        = np.load(args.x_test).item()
 X_test_words  = np.load(args.x_test_words).item()

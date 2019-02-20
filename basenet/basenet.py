@@ -310,6 +310,20 @@ class BaseNet(nn.Module):
     
     def load(self, inpath):
         self.load_state_dict(torch.load(inpath))
+    
+    def save_checkpoint(self, outpath):
+        ckpt = {
+            "model_state_dict" : self.state_dict(),
+            "opt_state_dict"   : self.opt.state_dict(),
+            "epoch"            : self.epoch,
+        }
+        torch.save(ckpt, outpath)
+    
+    def load_checkpoint(self, inpath):
+        ckpt = torch.load(inpath, map_location=self.device)
+        self.load_state_dict(ckpt['model_state_dict'])
+        self.opt.load_state_dict(ckpt['opt_state_dict'])
+        self.set_progress(ckpt['epoch'])
 
 
 class BaseWrapper(BaseNet):
