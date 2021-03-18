@@ -9,7 +9,7 @@ setup(
     classifiers=[],
     description='pytorch training tools',
     keywords=['basenet'],
-    license='ALV2',
+    license='Apache-2.0',
     packages=find_packages(),
     version="0.0.0"
 )
